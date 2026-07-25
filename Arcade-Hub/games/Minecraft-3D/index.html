@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Voxel Survival</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+    <!-- THREE.JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- POINTER LOCK CONTROLS -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+</head>
+
+
+<body>
+
+
+<!-- ========================================= -->
+<!-- START SCREEN -->
+<!-- ========================================= -->
+
+<div id="startScreen">
+
+    <div class="startBox">
+
+        <div class="logo">
+            VOXEL SURVIVAL
+        </div>
+
+        <div class="subtitle">
+            Explore • Mine • Build • Survive
+        </div>
+
+        <button id="playButton">
+            PLAY
+        </button>
+
+        <div class="instructions">
+
+            <p>W A S D — Move</p>
+
+            <p>SPACE — Jump</p>
+
+            <p>LEFT CLICK — Mine</p>
+
+            <p>RIGHT CLICK — Place</p>
+
+            <p>1 - 5 — Select Block</p>
+
+            <p>ESC — Pause</p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ========================================= -->
+<!-- CROSSHAIR -->
+<!-- ========================================= -->
+
+<div id="crosshair">
+    +
+</div>
+
+
+<!-- ========================================= -->
+<!-- MINING PROGRESS -->
+<!-- ========================================= -->
+
+<div id="miningUI">
+
+    <div id="miningText">
+        Mining...
+    </div>
+
+    <div id="miningBar">
+
+        <div id="miningFill"></div>
+
+    </div>
+
+</div>
+
+
+<!-- ========================================= -->
+<!-- HOTBAR -->
+<!-- ========================================= -->
+
+<div id="hotbar">
+
+</div>
+
+
+<!-- ========================================= -->
+<!-- HUD -->
+<!-- ========================================= -->
+
+<div id="hud">
+
+    <div id="health">
+        ❤️ 20
+    </div>
+
+    <div id="food">
+        🍗 20
+    </div>
+
+</div>
+
+
+<!-- ========================================= -->
+<!-- GAME SCRIPTS -->
+<!-- ========================================= -->
+
+<script src="js/main.js"></script>
+
+<script src="js/blocks.js"></script>
+
+<script src="js/world.js"></script>
+
+<script src="js/chunks.js"></script>
+
+<script src="js/player.js"></script>
+
+<script src="js/interaction.js"></script>
+
+
+</body>
+
+</html>
