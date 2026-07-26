@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade Hub | Premium Gaming</title>
+    <link rel="stylesheet" href="css/main.css">
+    <!-- Premium Modern Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Background Ambient Gradients -->
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="homePage" class="page active">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🎮</span> ARCADE<span class="highlight">HUB</span>
+            </div>
+            <button id="themeToggle" class="theme-toggle">
+                <span class="theme-icon">☀️</span> <span class="theme-text">Light Mode</span>
+            </button>
+        </header>
+
+        <main class="main-container">
+            <div class="hero-section">
+                <h1 class="hero-title">Experience the <br><span class="gradient-text">Next Generation</span> of Web Games.</h1>
+                <p class="hero-subtitle">Meticulously crafted arcade experiences. Click any showcase below to begin playing instantly.</p>
+            </div>
+            
+            <div class="game-grid" id="gameGrid">
+                <!-- Games injected here by JS -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Game Player Overlay -->
+    <div id="gamePage" class="page hidden">
+        <div class="game-nav">
+            <button class="back-home" id="backHomeBtn">
+                <span class="arrow">←</span> Return to Showcase
+            </button>
+            <h2 class="game-title" id="gameTitleDisplay">Game Title</h2>
+            <div style="width: 150px;"></div> <!-- Spacer for perfect centering -->
+        </div>
+        <div class="game-container">
+            <iframe id="gameFrame" src="" allow="autoplay; keyboard; pointer-lock"></iframe>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
