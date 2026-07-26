@@ -1,57 +1,887 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gaming Odyssey | Premium Gaming</title>
-    <link rel="stylesheet" href="css/main.css">
-    <!-- Premium Modern Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="Gaming Odyssey — a collection of handcrafted web games built for players who love to explore."
+    >
+
+    <meta
+        name="theme-color"
+        content="#080b14"
+    >
+
+    <title>Gaming Odyssey | Enter the Game</title>
+
+    <!-- FAVICON -->
+    <link
+        rel="icon"
+        type="image/svg+xml"
+        href="assets/favicon.svg"
+    >
+
+    <!-- FONT -->
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet"
+    >
+
+    <!-- CSS -->
+    <link
+        rel="stylesheet"
+        href="css/main.css"
+    >
+
 </head>
+
+
 <body>
-    <!-- Background Ambient Gradients -->
-    <div class="ambient-bg">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-    </div>
 
-    <!-- Main Dashboard -->
-    <div id="homePage" class="page active">
-        <header class="header">
-            <div class="logo">
-                <span class="logo-icon">🎮</span> GAMING<span class="highlight">ODYSSEY</span>
-            </div>
-            <button id="themeToggle" class="theme-toggle">
-                <span class="theme-icon">☀️</span> <span class="theme-text">Light Mode</span>
-            </button>
-        </header>
+<!-- =====================================================
+     AMBIENT BACKGROUND
+===================================================== -->
 
-        <main class="main-container">
-            <div class="hero-section">
-                <h1 class="hero-title">Experience the <br><span class="gradient-text">Next Generation</span> of Web Games.</h1>
-                <p class="hero-subtitle">Meticulously crafted arcade experiences. Click any showcase below to begin playing instantly.</p>
-            </div>
-            
-            <div class="game-grid" id="gameGrid">
-                <!-- Games injected here by JS -->
-            </div>
-        </main>
-    </div>
+<div class="ambient-background">
 
-    <!-- Game Player Overlay -->
-    <div id="gamePage" class="page hidden">
-        <div class="game-nav">
-            <button class="back-home" id="backHomeBtn">
-                <span class="arrow">←</span> Return to Showcase
-            </button>
-            <h2 class="game-title" id="gameTitleDisplay">Game Title</h2>
-            <div style="width: 150px;"></div> <!-- Spacer for perfect centering -->
+    <div class="ambient-orb orb-one"></div>
+
+    <div class="ambient-orb orb-two"></div>
+
+    <div class="ambient-orb orb-three"></div>
+
+    <div class="grid-overlay"></div>
+
+</div>
+
+
+<!-- =====================================================
+     NAVIGATION
+===================================================== -->
+
+<header class="site-header">
+
+    <a
+        href="#home"
+        class="brand"
+    >
+
+        <div class="brand-icon">
+            🎮
         </div>
-        <div class="game-container">
-            <iframe id="gameFrame" src="" allow="autoplay; keyboard; pointer-lock"></iframe>
+
+        <div class="brand-text">
+            GAMING<span>ODYSSEY</span>
         </div>
+
+    </a>
+
+
+    <nav
+        class="desktop-nav"
+        id="desktopNav"
+    >
+
+        <a
+            href="#home"
+            data-page="home"
+        >
+            Home
+        </a>
+
+        <a
+            href="#games"
+            data-page="games"
+        >
+            Games
+        </a>
+
+        <a
+            href="#about"
+            data-page="about"
+        >
+            About
+        </a>
+
+        <a
+            href="#contact"
+            data-page="contact"
+        >
+            Contact
+        </a>
+
+    </nav>
+
+
+    <div class="header-actions">
+
+        <button
+            class="theme-button"
+            id="themeToggle"
+            aria-label="Toggle theme"
+        >
+
+            <span id="themeIcon">
+                ☀️
+            </span>
+
+        </button>
+
+
+        <button
+            class="mobile-menu-button"
+            id="mobileMenuButton"
+            aria-label="Open menu"
+        >
+
+            ☰
+
+        </button>
+
     </div>
 
-    <script src="js/main.js"></script>
+</header>
+
+
+<!-- =====================================================
+     MOBILE NAVIGATION
+===================================================== -->
+
+<div
+    class="mobile-nav"
+    id="mobileNav"
+>
+
+    <a href="#home">
+        🏠 Home
+    </a>
+
+    <a href="#games">
+        🎮 Games
+    </a>
+
+    <a href="#about">
+        🌌 About
+    </a>
+
+    <a href="#contact">
+        📩 Contact
+    </a>
+
+</div>
+
+
+<!-- =====================================================
+     MAIN APPLICATION
+===================================================== -->
+
+<main id="app">
+
+
+<!-- =====================================================
+     HOME PAGE
+===================================================== -->
+
+<section
+    class="page"
+    id="homePage"
+    data-page-section="home"
+>
+
+    <div class="hero">
+
+        <div class="hero-badge">
+
+            <span class="status-dot"></span>
+
+            THE ODYSSEY IS OPEN
+
+        </div>
+
+
+        <h1 class="hero-title">
+
+            YOUR NEXT
+
+            <span>
+                GAMING ODYSSEY
+            </span>
+
+            STARTS HERE.
+
+        </h1>
+
+
+        <p class="hero-description">
+
+            Welcome to a universe of handcrafted web games,
+            creative experiments and unforgettable digital adventures.
+
+        </p>
+
+
+        <div class="hero-buttons">
+
+            <a
+                href="#games"
+                class="primary-button"
+            >
+
+                <span>
+                    ENTER THE ODYSSEY
+                </span>
+
+                <span>
+                    →
+                </span>
+
+            </a>
+
+
+            <a
+                href="#about"
+                class="secondary-button"
+            >
+
+                Discover Our Story
+
+            </a>
+
+        </div>
+
+
+        <div class="hero-stats">
+
+            <div class="stat">
+
+                <strong id="gameCount">
+                    0
+                </strong>
+
+                <span>
+                    Games
+                </span>
+
+            </div>
+
+
+            <div class="stat-divider"></div>
+
+
+            <div class="stat">
+
+                <strong>
+                    ∞
+                </strong>
+
+                <span>
+                    Adventures
+                </span>
+
+            </div>
+
+
+            <div class="stat-divider"></div>
+
+
+            <div class="stat">
+
+                <strong>
+                    100%
+                </strong>
+
+                <span>
+                    Ours
+                </span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- FEATURED GAME -->
+
+    <div class="featured-section">
+
+        <div class="section-heading">
+
+            <div>
+
+                <span class="eyebrow">
+                    FEATURED EXPERIENCE
+                </span>
+
+                <h2>
+                    Ready to Play?
+                </h2>
+
+            </div>
+
+
+            <a
+                href="#games"
+                class="text-link"
+            >
+                View All Games →
+            </a>
+
+        </div>
+
+
+        <div
+            class="featured-card"
+            id="featuredGame"
+        >
+
+            <!-- Generated by JS -->
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     GAMES PAGE
+===================================================== -->
+
+<section
+    class="page"
+    id="gamesPage"
+    data-page-section="games"
+>
+
+    <div class="page-heading">
+
+        <span class="eyebrow">
+            THE ARCADE
+        </span>
+
+        <h1>
+            Choose Your
+            <span>
+                Adventure.
+            </span>
+        </h1>
+
+        <p>
+            Every game is crafted by us.
+            More worlds are coming soon.
+        </p>
+
+    </div>
+
+
+    <div class="game-controls">
+
+        <div class="search-box">
+
+            <span>
+                🔍
+            </span>
+
+            <input
+                type="text"
+                id="gameSearch"
+                placeholder="Search games..."
+            >
+
+        </div>
+
+
+        <div
+            class="category-filters"
+            id="categoryFilters"
+        >
+
+            <!-- Generated by JS -->
+
+        </div>
+
+    </div>
+
+
+    <div
+        class="game-grid"
+        id="gameGrid"
+    >
+
+        <!-- Games generated by JS -->
+
+    </div>
+
+
+    <div
+        class="no-games"
+        id="noGames"
+    >
+
+        <div>
+            🔭
+        </div>
+
+        <h3>
+            No games found
+        </h3>
+
+        <p>
+            Try another search or category.
+        </p>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     ABOUT PAGE
+===================================================== -->
+
+<section
+    class="page"
+    id="aboutPage"
+    data-page-section="about"
+>
+
+    <div class="page-heading">
+
+        <span class="eyebrow">
+            OUR STORY
+        </span>
+
+        <h1>
+            Welcome to
+            <span>
+                Gaming Odyssey.
+            </span>
+        </h1>
+
+        <p>
+            We're building our own little universe,
+            one game at a time.
+        </p>
+
+    </div>
+
+
+    <div class="about-grid">
+
+        <div class="about-card large-card">
+
+            <div class="about-icon">
+                🚀
+            </div>
+
+            <h2>
+                Built From Imagination
+            </h2>
+
+            <p>
+
+                Gaming Odyssey is our personal gaming universe.
+
+                Instead of simply playing games,
+                we wanted to build them.
+
+                From arcade football to flying challenges
+                and experimental 3D worlds,
+                every project is another step in our journey.
+
+            </p>
+
+        </div>
+
+
+        <div class="about-card">
+
+            <div class="about-icon">
+                🎮
+            </div>
+
+            <h2>
+                Made By Us
+            </h2>
+
+            <p>
+
+                Every game you find here is part of our own
+                collection of projects.
+
+            </p>
+
+        </div>
+
+
+        <div class="about-card">
+
+            <div class="about-icon">
+                🌍
+            </div>
+
+            <h2>
+                Always Expanding
+            </h2>
+
+            <p>
+
+                This universe isn't finished.
+
+                New games, new ideas and new experiences
+                will continue to appear here.
+
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="vision-banner">
+
+        <span>
+            OUR VISION
+        </span>
+
+        <h2>
+            Play.
+            Create.
+            Explore.
+            Repeat.
+        </h2>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     CONTACT PAGE
+===================================================== -->
+
+<section
+    class="page"
+    id="contactPage"
+    data-page-section="contact"
+>
+
+    <div class="page-heading">
+
+        <span class="eyebrow">
+            CONNECT
+        </span>
+
+        <h1>
+            Let's Build Something
+            <span>
+                Awesome.
+            </span>
+        </h1>
+
+        <p>
+            Have an idea, suggestion or feedback?
+            We'd love to hear it.
+        </p>
+
+    </div>
+
+
+    <div class="contact-grid">
+
+
+        <div class="contact-info">
+
+            <div class="contact-card">
+
+                <div class="contact-icon">
+                    💡
+                </div>
+
+                <h3>
+                    Suggest a Game
+                </h3>
+
+                <p>
+                    Tell us what kind of game
+                    you want to see next.
+                </p>
+
+            </div>
+
+
+            <div class="contact-card">
+
+                <div class="contact-icon">
+                    💬
+                </div>
+
+                <h3>
+                    Feedback
+                </h3>
+
+                <p>
+                    Found a bug?
+                    Have an idea to improve the experience?
+                </p>
+
+            </div>
+
+
+            <div class="contact-card">
+
+                <div class="contact-icon">
+                    🚀
+                </div>
+
+                <h3>
+                    Collaborate
+                </h3>
+
+                <p>
+                    Want to build something
+                    together?
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <form
+            class="contact-form"
+            id="contactForm"
+        >
+
+            <div class="form-row">
+
+                <div class="form-group">
+
+                    <label>
+                        Your Name
+                    </label>
+
+                    <input
+                        type="text"
+                        required
+                        placeholder="Enter your name"
+                    >
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label>
+                        Email
+                    </label>
+
+                    <input
+                        type="email"
+                        required
+                        placeholder="you@example.com"
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Subject
+                </label>
+
+                <input
+                    type="text"
+                    required
+                    placeholder="What's on your mind?"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Message
+                </label>
+
+                <textarea
+                    rows="6"
+                    required
+                    placeholder="Tell us everything..."
+                ></textarea>
+
+            </div>
+
+
+            <button
+                type="submit"
+                class="primary-button submit-button"
+            >
+
+                Send Message
+                →
+
+            </button>
+
+
+            <p
+                class="form-message"
+                id="formMessage"
+            ></p>
+
+        </form>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     GAME PLAYER PAGE
+===================================================== -->
+
+<section
+    class="game-player-page"
+    id="gamePlayerPage"
+>
+
+    <div class="game-player-header">
+
+        <button
+            id="backToGames"
+            class="back-button"
+        >
+
+            ←
+            Back to Games
+
+        </button>
+
+
+        <div class="playing-now">
+
+            <span class="live-dot"></span>
+
+            NOW PLAYING
+
+        </div>
+
+
+        <h2 id="gameTitleDisplay">
+            Game
+        </h2>
+
+
+        <button
+            id="fullscreenButton"
+            class="player-action"
+        >
+
+            ⛶
+
+        </button>
+
+    </div>
+
+
+    <div class="game-frame-wrapper">
+
+        <iframe
+            id="gameFrame"
+            src=""
+            allow="autoplay; fullscreen; pointer-lock"
+            title="Game Player"
+        ></iframe>
+
+    </div>
+
+</section>
+
+
+</main>
+
+
+<!-- =====================================================
+     FOOTER
+===================================================== -->
+
+<footer class="site-footer">
+
+    <div class="footer-brand">
+
+        🎮
+
+        <strong>
+            GAMINGODYSSEY
+        </strong>
+
+    </div>
+
+
+    <p>
+        Built with imagination. Played with passion.
+    </p>
+
+
+    <div class="footer-links">
+
+        <a href="#home">
+            Home
+        </a>
+
+        <a href="#games">
+            Games
+        </a>
+
+        <a href="#about">
+            About
+        </a>
+
+        <a href="#contact">
+            Contact
+        </a>
+
+    </div>
+
+
+    <p class="copyright">
+
+        © 2026 Gaming Odyssey.
+        All adventures reserved.
+
+    </p>
+
+</footer>
+
+
+<!-- JAVASCRIPT -->
+
+<script src="js/main.js"></script>
+
 </body>
+
 </html>
