@@ -1,87 +1,378 @@
+/* =========================================================
+   GLOBAL RESET
+========================================================= */
+
 * {
     box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
 }
 
 body {
-    margin: 0;
-    padding: 0;
-    background: radial-gradient(circle at center, #1e272e, #0f1419);
+    background:
+        radial-gradient(
+            circle at center,
+            #1e272e 0%,
+            #0f1419 70%
+        );
+
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
-    color: white;
-    font-family: 'Outfit', sans-serif;
+
     overflow: hidden;
+
+    font-family:
+        "Outfit",
+        "Segoe UI",
+        Arial,
+        sans-serif;
+
+    color: white;
+
+    touch-action: none;
 }
+
+
+/* =========================================================
+   GAME CONTAINER
+========================================================= */
 
 #gameContainer {
     position: relative;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(46, 204, 113, 0.2);
+
+    width: min(100vw, 900px);
+    height: min(100vh, 600px);
+
+    aspect-ratio: 3 / 2;
+
+    box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.9),
+        0 0 30px rgba(46, 204, 113, 0.2);
+
     border-radius: 12px;
+
     overflow: hidden;
+
     border: 4px solid #ffffff;
+
+    background: #27ae60;
+
+    flex-shrink: 0;
 }
 
-canvas {
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+#footballCanvas {
     display: block;
-    background-color: #27ae60;
-}
-/* --- EXISTING CANVAS CSS (From previous step) --- */
-canvas {
-    max-width: 100%;
-    max-height: 100vh;
-    object-fit: contain;
-    background: #2e7d32; 
-    border: 4px solid #ffffff;
+
+    width: 100%;
+    height: 100%;
+
+    background: #27ae60;
+
+    image-rendering: auto;
+
+    touch-action: none;
 }
 
-/* --- NEW MOBILE CONTROLS CSS --- */
+
+/* =========================================================
+   MOBILE CONTROLS
+========================================================= */
+
 .mobile-controls {
+
     position: absolute;
-    bottom: 30px;
+
     left: 0;
+    right: 0;
+
+    bottom: 12px;
+
     width: 100%;
-    display: none; /* Hidden by default on PC */
+
+    display: none;
+
+    align-items: flex-end;
+
     justify-content: space-between;
-    padding: 0 30px;
-    box-sizing: border-box;
-    pointer-events: none; /* Lets you tap the canvas through empty space */
+
+    padding:
+        0
+        max(15px, env(safe-area-inset-right))
+        max(15px, env(safe-area-inset-bottom))
+        max(15px, env(safe-area-inset-left));
+
+    pointer-events: none;
+
+    z-index: 20;
 }
+
+
+/* =========================================================
+   D-PAD
+========================================================= */
+
+.d-pad {
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 5px;
+
+    pointer-events: none;
+}
+
+
+.d-pad-row {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   CONTROL BUTTON
+========================================================= */
 
 .ctrl-btn {
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    border-radius: 12px;
-    width: 55px;
-    height: 55px;
-    font-size: 20px;
+
+    width: clamp(42px, 7vw, 60px);
+    height: clamp(42px, 7vw, 60px);
+
     display: flex;
+
     align-items: center;
     justify-content: center;
-    pointer-events: auto; /* Makes buttons clickable */
+
+    border-radius: 12px;
+
+    background:
+        rgba(255, 255, 255, 0.14);
+
+    backdrop-filter:
+        blur(12px);
+
+    -webkit-backdrop-filter:
+        blur(12px);
+
+    border:
+        1px solid
+        rgba(255, 255, 255, 0.35);
+
+    color: white;
+
+    font-size: clamp(16px, 3vw, 24px);
+
+    font-weight: bold;
+
     user-select: none;
+
     -webkit-user-select: none;
-    touch-action: manipulation; /* Stops annoying double-tap zoom on phones */
-    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+
+    touch-action: none;
+
+    pointer-events: auto;
+
+    box-shadow:
+        0 8px 20px
+        rgba(0, 0, 0, 0.35);
+
+    transition:
+        transform 0.08s ease,
+        background 0.08s ease;
 }
 
-.ctrl-btn:active, .ctrl-btn.pressed { 
-    background: rgba(0, 243, 255, 0.5); 
-    border-color: #00f3ff;
-    transform: scale(0.95);
+
+.ctrl-btn:active,
+.ctrl-btn.pressed {
+
+    background:
+        rgba(0, 243, 255, 0.5);
+
+    border-color:
+        #00f3ff;
+
+    transform:
+        scale(0.92);
+
+    box-shadow:
+        0 0 20px
+        rgba(0, 243, 255, 0.5);
 }
 
-.d-pad { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.d-pad-row { display: flex; gap: 60px; }
-.round { border-radius: 50%; width: 75px; height: 75px; font-size: 35px; }
 
-/* Media Query: ONLY show controls on screens smaller than 800px (Mobile/Tablets) */
-@media (max-width: 800px) {
-    .mobile-controls { 
-        display: flex; 
+/* =========================================================
+   ACTION BUTTON
+========================================================= */
+
+.action-buttons {
+
+    pointer-events: none;
+}
+
+
+.round {
+
+    width: clamp(60px, 10vw, 85px);
+    height: clamp(60px, 10vw, 85px);
+
+    border-radius: 50%;
+
+    font-size:
+        clamp(28px, 5vw, 40px);
+}
+
+
+.blue-action-btn {
+
+    background:
+        rgba(52, 152, 219, 0.25);
+}
+
+
+/* =========================================================
+   BLUE TEAM D-PAD
+========================================================= */
+
+.blue-d-pad {
+
+    margin-left: auto;
+}
+
+
+/* =========================================================
+   RESPONSIVE TABLET / MOBILE
+========================================================= */
+
+@media (max-width: 900px) {
+
+    body {
+        padding: 0;
+    }
+
+    #gameContainer {
+
+        width: 100vw;
+
+        height: auto;
+
+        max-height: 100vh;
+
+        aspect-ratio: 3 / 2;
+
+        border-width: 2px;
+
+        border-radius: 0;
+    }
+
+    .mobile-controls {
+        display: flex;
+    }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+
+    .mobile-controls {
+
+        bottom: 8px;
+
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .ctrl-btn {
+
+        width: 45px;
+        height: 45px;
+
+        font-size: 17px;
+    }
+
+    .round {
+
+        width: 62px;
+        height: 62px;
+
+        font-size: 28px;
+    }
+}
+
+
+/* =========================================================
+   LANDSCAPE PHONE
+========================================================= */
+
+@media
+(max-height: 500px)
+and (orientation: landscape) {
+
+    #gameContainer {
+
+        width: 100vw;
+
+        height: 100vh;
+
+        aspect-ratio: auto;
+    }
+
+    .mobile-controls {
+
+        bottom: 5px;
+    }
+
+    .ctrl-btn {
+
+        width: 42px;
+        height: 42px;
+    }
+
+    .round {
+
+        width: 58px;
+        height: 58px;
+    }
+}
+
+
+/* =========================================================
+   PORTRAIT PHONE
+========================================================= */
+
+@media
+(max-width: 600px)
+and (orientation: portrait) {
+
+    #gameContainer {
+
+        width: 100vw;
+
+        height: auto;
+
+        aspect-ratio: 3 / 2;
     }
 }
