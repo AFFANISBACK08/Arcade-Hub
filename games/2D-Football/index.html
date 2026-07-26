@@ -1,16 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>2D Star Football - Visual Edition</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> <!-- Prevents phone zooming -->
+    <title>2D Football</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="gameContainer">
-        <canvas id="gameCanvas" width="900" height="600"></canvas>
+    
+    <canvas id="footballCanvas" width="800" height="400"></canvas>
+
+    <!-- MOBILE VIRTUAL GAMEPAD (Hidden on Desktop) -->
+    <div class="mobile-controls">
+        <div class="d-pad">
+            <button id="btn-up" class="ctrl-btn" data-key="ArrowUp">▲</button>
+            <div class="d-pad-row">
+                <button id="btn-left" class="ctrl-btn" data-key="ArrowLeft">◀</button>
+                <button id="btn-right" class="ctrl-btn" data-key="ArrowRight">▶</button>
+            </div>
+            <button id="btn-down" class="ctrl-btn" data-key="ArrowDown">▼</button>
+        </div>
+        <div class="action-buttons">
+            <!-- Change 'Space' to whatever key your game uses to kick/pass! -->
+            <button id="btn-action" class="ctrl-btn round" data-key="Space">⚽</button>
+        </div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
