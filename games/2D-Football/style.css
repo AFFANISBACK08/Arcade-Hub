@@ -27,3 +27,61 @@ canvas {
     display: block;
     background-color: #27ae60;
 }
+/* --- EXISTING CANVAS CSS (From previous step) --- */
+canvas {
+    max-width: 100%;
+    max-height: 100vh;
+    object-fit: contain;
+    background: #2e7d32; 
+    border: 4px solid #ffffff;
+}
+
+/* --- NEW MOBILE CONTROLS CSS --- */
+.mobile-controls {
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    width: 100%;
+    display: none; /* Hidden by default on PC */
+    justify-content: space-between;
+    padding: 0 30px;
+    box-sizing: border-box;
+    pointer-events: none; /* Lets you tap the canvas through empty space */
+}
+
+.ctrl-btn {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 12px;
+    width: 55px;
+    height: 55px;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto; /* Makes buttons clickable */
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation; /* Stops annoying double-tap zoom on phones */
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+}
+
+.ctrl-btn:active, .ctrl-btn.pressed { 
+    background: rgba(0, 243, 255, 0.5); 
+    border-color: #00f3ff;
+    transform: scale(0.95);
+}
+
+.d-pad { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.d-pad-row { display: flex; gap: 60px; }
+.round { border-radius: 50%; width: 75px; height: 75px; font-size: 35px; }
+
+/* Media Query: ONLY show controls on screens smaller than 800px (Mobile/Tablets) */
+@media (max-width: 800px) {
+    .mobile-controls { 
+        display: flex; 
+    }
+}
