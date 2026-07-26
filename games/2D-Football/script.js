@@ -732,6 +732,47 @@ function gameLoop() {
     draw();
     requestAnimationFrame(gameLoop);
 }
+/* =========================================================
+   GHOST KEYBOARD CONTROLLER (FOR MOBILE TOUCH SUPPORT)
+========================================================= */
+const ctrlButtons = document.querySelectorAll('.ctrl-btn');
+
+// Function to simulate a key press
+function simulateKeyEvent(type, keyCode, key) {
+    const event = new KeyboardEvent(type, {
+        code: keyCode,
+        key: key,
+        bubbles: true,
+        cancelable: true
+    });
+    window.dispatchEvent(event);
+}
+
+// Attach touch listeners to all virtual buttons
+ctrlButtons.forEach(btn => {
+    const keyCode = btn.getAttribute('data-key');
+    let keyName = keyCode.replace('Arrow', ''); // Simplifies "ArrowUp" to "Up" etc.
+
+    // When the user touches the screen
+    btn.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Stops the screen from scrolling
+        btn.classList.add('pressed');
+        simulateKeyEvent('keydown', keyCode, keyName);
+    });
+
+    // When the user lifts their finger
+    btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        btn.classList.remove('pressed');
+        simulateKeyEvent('keyup', keyCode, keyName);
+    });
+    
+    // Fallback just in case their finger slides off the button
+    btn.addEventListener('touchcancel', (e) => {
+        btn.classList.remove('pressed');
+        simulateKeyEvent('keyup', keyCode, keyName);
+    });
+});
 
 // ─── Start ───
 initGame();
