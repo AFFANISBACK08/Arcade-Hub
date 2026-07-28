@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
 
 * {
     margin: 0;
@@ -10,85 +10,40 @@
 }
 
 body {
-    background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+    background: radial-gradient(circle at center, #1e272e 0%, #0a0f14 100%);
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     font-family: 'Outfit', sans-serif;
-    color: #ffffff;
+    color: #fff;
     overflow: hidden;
     touch-action: none;
 }
 
 .game-wrapper {
     position: relative;
-    background: #0f172a;
-    border-radius: 20px;
-    box-shadow: 
-        0 0 50px rgba(56, 189, 248, 0.25), 
-        0 0 100px rgba(239, 68, 68, 0.15),
-        0 20px 40px rgba(0, 0, 0, 0.8);
-    border: 2px solid rgba(255, 255, 255, 0.15);
+    width: min(100vw, 900px);
+    height: min(100vh, 600px);
+    aspect-ratio: 3 / 2;
+    border-radius: 16px;
     overflow: hidden;
-    max-width: 100vw;
-    max-height: 100vh;
-    transition: border-color 0.3s ease;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9), 0 0 40px rgba(46, 204, 113, 0.12);
+    background: #1a1a2e;
+    flex-shrink: 0;
 }
 
 canvas {
     display: block;
-    max-width: 100vw;
-    max-height: 100vh;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    background: #1a1a2e;
+    image-rendering: auto;
     touch-action: none;
 }
 
-/* ─── GOAL IMPACT FLASH & SHAKE FX ─── */
-.goal-flash-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(241,196,15,0.6) 100%);
-    pointer-events: none;
-    opacity: 0;
-    z-index: 10;
-    transition: opacity 0.05s ease-out;
-}
-
-.goal-flash-overlay.active {
-    opacity: 1;
-    animation: flashFade 0.45s ease-out forwards;
-}
-
-@keyframes flashFade {
-    0% { opacity: 0.95; }
-    30% { opacity: 0.6; }
-    100% { opacity: 0; }
-}
-
-/* Violent Screen Shake for Goal Dopamine Impact */
-.game-wrapper.shake-impact {
-    animation: violentShake 0.45s cubic-bezier(.36,.07,.19,.97) both;
-}
-
-@keyframes violentShake {
-    0% { transform: translate(0, 0) rotate(0deg); }
-    10% { transform: translate(-14px, 10px) rotate(-1.5deg); }
-    20% { transform: translate(16px, -12px) rotate(2deg); }
-    30% { transform: translate(-12px, -14px) rotate(-1deg); }
-    40% { transform: translate(14px, 12px) rotate(1.5deg); }
-    50% { transform: translate(-16px, 8px) rotate(-2deg); }
-    60% { transform: translate(10px, -10px) rotate(1deg); }
-    70% { transform: translate(-8px, 14px) rotate(-1.5deg); }
-    80% { transform: translate(12px, -8px) rotate(1deg); }
-    90% { transform: translate(-10px, 5px) rotate(-0.5deg); }
-    100% { transform: translate(0, 0) rotate(0deg); }
-}
-
-/* ─── TOUCH CONTROLS ─── */
+/* Touch Controls */
 .touch-controls {
     position: absolute;
     top: 0;
@@ -97,69 +52,75 @@ canvas {
     height: 100%;
     pointer-events: none;
     display: none;
-    z-index: 5;
 }
 
 .joystick-base {
     position: absolute;
-    width: 110px;
-    height: 110px;
-    background: rgba(255, 255, 255, 0.12);
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    width: clamp(80px, 11vw, 110px);
+    height: clamp(80px, 11vw, 110px);
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
     pointer-events: auto;
     touch-action: none;
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
 }
 
 .joystick-stick {
-    width: 45px;
-    height: 45px;
-    background: rgba(255, 255, 255, 0.7);
+    width: 38%;
+    height: 38%;
+    background: rgba(255, 255, 255, 0.5);
     border-radius: 50%;
-    box-shadow: 0 0 14px rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
     pointer-events: none;
     transition: transform 0.05s linear;
 }
 
 .shoot-btn {
     position: absolute;
-    width: 75px;
-    height: 75px;
-    background: radial-gradient(circle, rgba(241, 196, 15, 0.85) 0%, rgba(211, 84, 0, 0.85) 100%);
-    border: 3px solid rgba(255, 255, 255, 0.7);
+    width: clamp(56px, 8vw, 75px);
+    height: clamp(56px, 8vw, 75px);
+    background: radial-gradient(circle, rgba(241, 196, 15, 0.8) 0%, rgba(211, 84, 0, 0.8) 100%);
+    border: 3px solid rgba(255, 255, 255, 0.5);
     border-radius: 50%;
-    font-size: 34px;
+    font-size: clamp(26px, 4vw, 36px);
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
     pointer-events: auto;
     touch-action: none;
-    box-shadow: 0 0 25px rgba(241, 196, 15, 0.5);
+    box-shadow: 0 0 30px rgba(241, 196, 15, 0.3);
     outline: none;
+    transition: transform 0.1s ease;
 }
 
 .shoot-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.85);
     background: radial-gradient(circle, rgba(241, 196, 15, 1) 0%, rgba(211, 84, 0, 1) 100%);
 }
 
-.mode-pve .p1-joy { bottom: 25px; left: 25px; }
-.mode-pve .p1-shoot { bottom: 25px; right: 25px; }
-.mode-pve .p2-joy, .mode-pve .p2-shoot { display: none !important; }
+.mode-1v1 .p1-joy   { bottom: 20px; left: 20px; }
+.mode-1v1 .p1-shoot { top: 20px; left: 20px; }
+.mode-1v1 .p2-joy   { top: 20px; right: 20px; }
+.mode-1v1 .p2-shoot { bottom: 20px; right: 20px; }
 
-.mode-1v1 .p1-joy { bottom: 25px; left: 25px; }
-.mode-1v1 .p1-shoot { top: 25px; left: 25px; }
-.mode-1v1 .p2-joy { top: 25px; right: 25px; }
-.mode-1v1 .p2-shoot { bottom: 25px; right: 25px; }
+.mode-pve .p1-joy   { bottom: 20px; left: 20px; }
+.mode-pve .p1-shoot { bottom: 20px; right: 20px; }
+.mode-pve .p2-joy,
+.mode-pve .p2-shoot { display: none !important; }
 
-/* ─── ONLY SHOW ON MOBILE / TOUCH DEVICES ─── */
 @media (hover: none) and (pointer: coarse) {
-    .touch-controls.is-active {
-        display: block !important;
-    }
+    .touch-controls.is-active { display: block !important; }
+    #gameCanvas { cursor: none; }
+}
+
+@media (max-width: 450px) {
+    .joystick-base { width: 64px; height: 64px; }
+    .joystick-stick { width: 32%; height: 32%; }
+    .shoot-btn { width: 48px; height: 48px; font-size: 22px; }
 }
