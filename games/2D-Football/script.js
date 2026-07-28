@@ -1,4481 +1,2127 @@
-// =========================================================
-// PRO STRIKER
-// CROSS-DEVICE EDITION
-// PC + LAPTOP + MOBILE + TABLET
-// =========================================================
+// ─── PRO STRIKER - Complete Sound Edition (FINAL) ───
 
+// ─── CANVAS SETUP ───
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const touchControlsElem = document.getElementById('touchControls');
+const gameWrapperElem = document.getElementById('gameWrapper');
+const goalFlashElem = document.getElementById('goalFlash');
 
-// =========================================================
-// CANVAS SETUP
-// =========================================================
+// ─── MOBILE DETECTION ───
+const isMobileDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
-const canvas =
-    document.getElementById('footballCanvas');
+// ─── SOUND SYSTEM ───
 
-const ctx =
-    canvas.getContext('2d');
+const SoundManager = {
+    // ─── State ───
+    sounds: {},
+    musicEnabled: true,
+    sfxEnabled: true,
+    isMusicPlaying: false,
+    currentMusic: null,
+    initialized: false,
+    crowdPlaying: false,
 
+    // ─── Load all sounds ───
+    init() {
+        if (this.initialized) return;
+        this.initialized = true;
 
-// The game ALWAYS uses this internal resolution.
-// CSS scales it to the player's screen.
+        // Define sound files with their EXACT names
+        const files = {
+            // Music (looped)
+            menuMusic: 'sounds/Game music.mp3',
+            crowd: 'sounds/When game is in play crowd sound.mp3',  // ← CORRECT FILE NAME
+            victory: 'sounds/Victory music.mp3',
+            defeat: 'sounds/Defeat music.mp3',
 
-const GAME_WIDTH = 900;
-const GAME_HEIGHT = 600;
+            // SFX
+            kick: 'sounds/kick sound.mp3',
+            goalCheer: 'sounds/Goal scored cheering.mp3',
+            goalNet: 'sounds/Goal strike the net sound.mp3',
+            whistleStart: 'sounds/Referee whistle game starting.mp3',
+            whistleStop: 'sounds/Referee whistle at halftime or end of match.mp3',
+            menuClick: 'sounds/Cinematic click sound.mp3',
+            confirm: 'sounds/confirm selection sound.mp3',
+        };
 
-canvas.width = GAME_WIDTH;
-canvas.height = GAME_HEIGHT;
+        // Load each sound
+        for (let [name, path] of Object.entries(files)) {
+            try {
+                const audio = new Audio(path);
+                audio.preload = 'auto';
+                // For music, set looping
+                if (name === 'menuMusic' || name === 'crowd' || name === 'victory' || name === 'defeat') {
+                    audio.loop = true;
+                }
+                this.sounds[name] = audio;
+                console.log(`✅ Loaded: ${name} from ${path}`);
+            } catch (e) {
+                console.warn(`⚠️ Could not load ${name}:`, e);
+            }
+        }
 
+        // Try to start menu music immediately
+        this.updateMusicForState(currentState);
+    },
 
-// =========================================================
-// GAME STATES
-// =========================================================
+    // ─── Play music (stops current music first) ───
+    playMusic(name, fadeIn = false) {
+        if (!this.musicEnabled) return;
+        const sound = this.sounds[name];
+        if (!sound) return;
 
-let currentState = 'MENU';
+        // Stop current music if different
+        if (this.currentMusic && this.currentMusic !== sound) {
+            this.currentMusic.pause();
+            this.currentMusic.currentTime = 0;
+        }
 
-let score = {
-    red: 0,
-    blue: 0
+        if (sound.paused || sound.currentTime === 0) {
+            sound.volume = 0.5;
+            sound.play().catch(e => console.warn('Music play blocked:', e));
+            this.currentMusic = sound;
+            this.isMusicPlaying = true;
+            
+            // Track crowd state
+            if (name === 'crowd') {
+                this.crowdPlaying = true;
+            } else {
+                this.crowdPlaying = false;
+            }
+        }
+    },
+
+    // ─── Stop music ───
+    stopMusic() {
+        if (this.currentMusic) {
+            this.currentMusic.pause();
+            this.currentMusic.currentTime = 0;
+            this.isMusicPlaying = false;
+        }
+        this.crowdPlaying = false;
+    },
+
+    // ─── Play SFX (short sounds) ───
+    playSFX(name, volume = 0.6) {
+        if (!this.sfxEnabled) return;
+        const sound = this.sounds[name];
+        if (!sound) return;
+
+        try {
+            // Clone to allow overlapping sounds
+            const clone = sound.cloneNode();
+            clone.volume = volume;
+            clone.play().catch(e => console.warn('SFX play blocked:', e));
+        } catch (e) {
+            // Fallback: play the original if it's not already playing
+            if (sound.paused) {
+                sound.volume = volume;
+                sound.currentTime = 0;
+                sound.play().catch(e => {});
+            }
+        }
+    },
+
+    // ─── Play goal sounds (two sounds at once) ───
+    playGoalSounds() {
+        this.playSFX('goalCheer', 0.7);
+        this.playSFX('goalNet', 0.6);
+        // Stop crowd during goal celebration (it will restart after)
+        this.stopCrowd();
+    },
+
+    // ─── Stop crowd sound ───
+    stopCrowd() {
+        if (this.sounds.crowd) {
+            this.sounds.crowd.pause();
+            this.sounds.crowd.currentTime = 0;
+            this.crowdPlaying = false;
+        }
+    },
+
+    // ─── Resume crowd sound ───
+    resumeCrowd() {
+        if (this.musicEnabled && this.sounds.crowd && !this.crowdPlaying) {
+            this.sounds.crowd.volume = 0.5;
+            this.sounds.crowd.play().catch(e => console.warn('Crowd resume blocked:', e));
+            this.crowdPlaying = true;
+            this.currentMusic = this.sounds.crowd;
+            this.isMusicPlaying = true;
+        }
+    },
+
+    // ─── Toggle music ───
+    toggleMusic() {
+        this.musicEnabled = !this.musicEnabled;
+        if (!this.musicEnabled) {
+            this.stopMusic();
+        } else {
+            // Resume appropriate music based on current state
+            this.updateMusicForState(currentState);
+        }
+        return this.musicEnabled;
+    },
+
+    // ─── Toggle SFX ───
+    toggleSFX() {
+        this.sfxEnabled = !this.sfxEnabled;
+        return this.sfxEnabled;
+    },
+
+    // ─── Update music based on game state ───
+    updateMusicForState(state) {
+        if (!this.musicEnabled) {
+            this.stopMusic();
+            return;
+        }
+
+        switch (state) {
+            case 'MENU':
+            case 'SETTINGS':
+            case 'INSTRUCTIONS':
+            case 'DIFFICULTY_SELECT':
+                this.playMusic('menuMusic');
+                break;
+            case 'PLAY':
+                // Play crowd if not already playing and not in goal celebration
+                if (!this.crowdPlaying && currentState !== 'GOAL_SCORED') {
+                    this.playMusic('crowd');
+                }
+                break;
+            case 'PAUSED':
+                // Keep crowd playing but we'll keep it
+                break;
+            case 'GOAL_SCORED':
+                // Crowd is stopped during goal celebration
+                break;
+            case 'MATCH_END':
+                // Determine winner and play victory or defeat
+                const isVSComputer = gameMode === 'pve';
+                const winner = lastScorer || '';
+                
+                if (isVSComputer) {
+                    // VS Computer: Victory if RED wins, Defeat if BLUE wins
+                    if (winner.includes('RED')) {
+                        this.playMusic('victory');
+                    } else if (winner.includes('BLUE')) {
+                        this.playMusic('defeat');
+                    } else {
+                        this.playMusic('defeat'); // Draw = defeat
+                    }
+                } else {
+                    // 1v1: Always play victory music
+                    this.playMusic('victory');
+                }
+                break;
+            default:
+                this.stopMusic();
+        }
+    }
 };
 
-let maxScore = 5;
+// ─── INITIALIZE SOUND ON PAGE LOAD ───
+// Try to initialize immediately (may be blocked by browser)
+setTimeout(() => {
+    SoundManager.init();
+}, 100);
 
+// Also initialize on user interaction
+function initSoundOnInteraction() {
+    if (!SoundManager.initialized) {
+        SoundManager.init();
+    }
+    // Resume music if it was blocked
+    SoundManager.updateMusicForState(currentState);
+}
 
-// =========================================================
-// BALL
-// =========================================================
+// Add listeners for user interaction
+document.addEventListener('click', initSoundOnInteraction);
+document.addEventListener('keydown', initSoundOnInteraction);
+document.addEventListener('touchstart', initSoundOnInteraction);
 
+// ─── GAME STATES ───
+let currentState = 'MENU';
+let gameMode = '1v1';
+let difficulty = 'EASY';
+let score = { red: 0, blue: 0 };
+let halfDuration = 45;
+let matchClock = halfDuration;
+let currentHalf = 1;
+let matchState = 'PLAY';
+let halftimeTimer = 0;
+const HALFTIME_BREAK = 3;
+let kickoffTeam = 'red';
+let nextKickoffTeam = null;
+let kickoffDelay = 0.5;
 let ball = {
-
-    x: 450,
-    y: 300,
-
-    radius: 9,
-
-    vx: 0,
-    vy: 0,
-
+    x: 450, y: 300, radius: 9,
+    vx: 0, vy: 0,
     owner: null,
-
     speed: 13,
-
     cooldownPlayer: null,
-
     cooldownTimer: 0
 };
-
-
-// =========================================================
-// PLAYERS
-// =========================================================
-
 let players = [];
-
 let arrowAngle = 0;
-
 let gkSpeed = 2.5;
-
-let gkDirection = {
-    red: 1,
-    blue: -1
-};
-
-
-// =========================================================
-// GAME EFFECTS
-// =========================================================
-
+let gkDirection = { red: 1, blue: -1 };
 let goalBannerTimer = 0;
-
 let lastScorer = '';
-
-let nextKickoffTeam = null;
-
 let particles = [];
+let screenShake = { duration: 0, intensity: 0, x: 0, y: 0 };
+let goalZoomScale = 1.0;
 
+// ─── MENU BACKGROUND PARTICLES ───
+let menuBgParticles = [];
+for (let i = 0; i < 40; i++) {
+    menuBgParticles.push({
+        x: Math.random() * 900,
+        y: Math.random() * 600,
+        radius: Math.random() * 3 + 1,
+        vx: (Math.random() - 0.5) * 0.8,
+        vy: (Math.random() - 0.5) * 0.8,
+        alpha: Math.random() * 0.5 + 0.2
+    });
+}
 
-// =========================================================
-// GOAL POSTS
-// =========================================================
+// ─── AI VARIABLES ───
+let aiTimer = 0;
+let aiReactionTimer = 20;
+let aiStartDelay = 60;
+let aiDribbleTime = 0;
+let aiPassCooldown = 0;
+let gkTimer = 0;
+let aiState = 'CHASE';
+let aiStateTimer = 0;
+let aiHoldBallTimer = 0;
+let aiTargetOffset = { x: 0, y: 0 };
+let aiTargetX = 0;
+let aiTargetY = 0;
+
+let activeLocks = {
+    red: { player: null, timer: 0 },
+    blue: { player: null, timer: 0 }
+};
 
 const posts = [
-
-    {
-        x: 25,
-        y: 200,
-        radius: 7
-    },
-
-    {
-        x: 25,
-        y: 400,
-        radius: 7
-    },
-
-    {
-        x: 875,
-        y: 200,
-        radius: 7
-    },
-
-    {
-        x: 875,
-        y: 400,
-        radius: 7
-    }
-
+    { x: 25, y: 200, radius: 7 },
+    { x: 25, y: 400, radius: 7 },
+    { x: 875, y: 200, radius: 7 },
+    { x: 875, y: 400, radius: 7 }
 ];
 
-
-// =========================================================
-// KEYBOARD / TOUCH INPUT
-// =========================================================
-
-const keys = {
-
-    w: false,
-    a: false,
-    s: false,
-    d: false,
-
-    space: false,
-
-    ArrowUp: false,
-    ArrowLeft: false,
-    ArrowDown: false,
-    ArrowRight: false,
-
-    enter: false
-
+let pauseButton = {
+    x: 860, y: 15, width: 30, height: 30,
+    hover: false
 };
 
+// ─── KEYBOARD STATE ───
+const keys = {
+    w: false, a: false, s: false, d: false, space: false,
+    ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false, enter: false,
+    p: false, Escape: false
+};
 
-// =========================================================
-// INPUT HELPER
-// =========================================================
-
-function setKeyState(key, state) {
-
-    if (keys.hasOwnProperty(key)) {
-
-        keys[key] = state;
-
+// ─── KEYBOARD LISTENERS ───
+window.addEventListener('keydown', (e) => {
+    initSoundOnInteraction();
+    
+    if ([' ', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', 'p', 'P'].includes(e.key)) {
+        e.preventDefault();
     }
+    
+    const keyLower = e.key.toLowerCase();
+    if (keyLower === ' ' || e.code === 'Space') keys.space = true;
+    if (e.key === 'Enter') keys.enter = true;
+    if (e.key === 'Escape') keys.Escape = true;
+    if (keyLower === 'p') keys.p = true;
+    if (keys.hasOwnProperty(keyLower) && keyLower !== ' ' && keyLower !== 'p') keys[keyLower] = true;
+    if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+    
+    if (keyLower === 'p' && currentState === 'PLAY') {
+        togglePause();
+    }
+    if (e.key === 'Escape' && currentState === 'PAUSED') {
+        togglePause();
+    }
+    
+    // Mute shortcuts: M for SFX, N for Music (toggle)
+    if (keyLower === 'm') {
+        SoundManager.toggleSFX();
+        SoundManager.playSFX('menuClick', 0.3);
+        updateTouchUI();
+    }
+    if (keyLower === 'n') {
+        SoundManager.toggleMusic();
+        SoundManager.playSFX('menuClick', 0.3);
+        updateTouchUI();
+    }
+    
+    if (currentState === 'MENU') {
+        if (e.key === '1') {
+            SoundManager.playSFX('menuClick');
+            selectMode('1v1');
+        }
+        if (e.key === '2') {
+            SoundManager.playSFX('menuClick');
+            currentState = 'DIFFICULTY_SELECT';
+        }
+        if (e.key === '3') {
+            SoundManager.playSFX('menuClick');
+            currentState = 'INSTRUCTIONS';
+        }
+        if (e.key === '4') {
+            SoundManager.playSFX('menuClick');
+            currentState = 'SETTINGS';
+        }
+    } else if (currentState === 'DIFFICULTY_SELECT') {
+        if (e.key === 'e' || e.key === 'E') {
+            SoundManager.playSFX('confirm');
+            difficulty = 'EASY';
+            selectMode('pve');
+        }
+        if (e.key === 'm' || e.key === 'M') {
+            SoundManager.playSFX('confirm');
+            difficulty = 'MEDIUM';
+            selectMode('pve');
+        }
+        if (e.key === 'h' || e.key === 'H') {
+            SoundManager.playSFX('confirm');
+            difficulty = 'HARD';
+            selectMode('pve');
+        }
+        if (e.key === 'Escape' || e.key === 'Backspace') {
+            SoundManager.playSFX('menuClick');
+            currentState = 'MENU';
+        }
+    } else if (currentState === 'INSTRUCTIONS' || currentState === 'SETTINGS') {
+        if (e.key === 'Escape' || e.key === 'Backspace') {
+            SoundManager.playSFX('menuClick');
+            currentState = 'MENU';
+        }
+    } else if (currentState === 'SETTINGS') {
+        if (e.key === 'ArrowUp') halfDuration = Math.min(120, halfDuration + 5);
+        if (e.key === 'ArrowDown') halfDuration = Math.max(15, halfDuration - 5);
+    } else if (currentState === 'MATCH_END') {
+        if (e.key === 'Enter' || e.key === ' ') {
+            SoundManager.playSFX('menuClick');
+            currentState = 'MENU';
+        }
+    }
+    updateTouchUI();
+});
 
+window.addEventListener('keyup', (e) => {
+    const keyLower = e.key.toLowerCase();
+    if (keyLower === ' ' || e.code === 'Space') keys.space = false;
+    if (e.key === 'Enter') keys.enter = false;
+    if (e.key === 'Escape') keys.Escape = false;
+    if (keyLower === 'p') keys.p = false;
+    if (keys.hasOwnProperty(keyLower) && keyLower !== ' ' && keyLower !== 'p') keys[keyLower] = false;
+    if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+});
+
+// ─── TOUCH / MENU HANDLING ───
+function getCanvasTouchPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY
+    };
 }
 
-
-// =========================================================
-// KEYBOARD DOWN
-// =========================================================
-
-window.addEventListener(
-    'keydown',
-    function (e) {
-
-        const key =
-            e.key.toLowerCase();
-
-        if (
-            [
-                ' ',
-                'enter',
-                'arrowup',
-                'arrowdown',
-                'arrowleft',
-                'arrowright'
-            ].includes(key)
-        ) {
-
-            e.preventDefault();
-
-        }
-
-
-        if (
-            e.code === 'Space' ||
-            e.key === ' '
-        ) {
-
-            keys.space = true;
-
-        }
-
-
-        if (e.key === 'Enter') {
-
-            keys.enter = true;
-
-        }
-
-
-        if (
-            keys.hasOwnProperty(key) &&
-            key !== ' '
-        ) {
-
-            keys[key] = true;
-
-        }
-
-
-        if (
-            keys.hasOwnProperty(e.key)
-        ) {
-
-            keys[e.key] = true;
-
-        }
-
-
-        // MENU
-
-        if (currentState === 'MENU') {
-
-            if (e.key === '1') {
-
-                initGame();
-
-                currentState = 'PLAY';
-
-            }
-
-            else if (e.key === '2') {
-
-                currentState =
-                    'INSTRUCTIONS';
-
-            }
-
-            else if (e.key === '3') {
-
-                currentState =
-                    'SETTINGS';
-
-            }
-
-        }
-
-
-        // BACK
-
-        else if (
-            currentState ===
-                'INSTRUCTIONS' ||
-            currentState ===
-                'SETTINGS'
-        ) {
-
-            if (
-                e.key === 'Escape' ||
-                e.key === 'Backspace'
-            ) {
-
-                currentState = 'MENU';
-
-            }
-
-        }
-
-
-        // SETTINGS
-
-        if (
-            currentState ===
-            'SETTINGS'
-        ) {
-
-            if (
-                e.key === 'ArrowUp'
-            ) {
-
-                maxScore++;
-
-            }
-
-            if (
-                e.key === 'ArrowDown' &&
-                maxScore > 1
-            ) {
-
-                maxScore--;
-
-            }
-
-        }
-
+canvas.addEventListener('pointerdown', (e) => {
+    initSoundOnInteraction();
+    const pos = getCanvasTouchPos(e);
+    
+    if (currentState === 'PLAY' && pos.x >= 860 && pos.x <= 890 && pos.y >= 15 && pos.y <= 45) {
+        SoundManager.playSFX('menuClick');
+        togglePause();
+        return;
     }
-);
-
-
-// =========================================================
-// KEYBOARD UP
-// =========================================================
-
-window.addEventListener(
-    'keyup',
-    function (e) {
-
-        const key =
-            e.key.toLowerCase();
-
-
-        if (
-            e.code === 'Space' ||
-            e.key === ' '
-        ) {
-
-            keys.space = false;
-
+    
+    if (currentState === 'MENU') {
+        if (pos.x >= 280 && pos.x <= 620 && pos.y >= 248 && pos.y <= 298) {
+            SoundManager.playSFX('menuClick');
+            selectMode('1v1');
+        } else if (pos.x >= 280 && pos.x <= 620 && pos.y >= 318 && pos.y <= 368) {
+            SoundManager.playSFX('menuClick');
+            currentState = 'DIFFICULTY_SELECT';
+        } else if (pos.x >= 280 && pos.x <= 620 && pos.y >= 388 && pos.y <= 438) {
+            SoundManager.playSFX('menuClick');
+            currentState = 'INSTRUCTIONS';
+        } else if (pos.x >= 280 && pos.x <= 620 && pos.y >= 458 && pos.y <= 508) {
+            SoundManager.playSFX('menuClick');
+            currentState = 'SETTINGS';
         }
-
-
-        if (
-            e.key === 'Enter'
-        ) {
-
-            keys.enter = false;
-
+    } else if (currentState === 'DIFFICULTY_SELECT') {
+        if (pos.x >= 180 && pos.x <= 330 && pos.y >= 250 && pos.y <= 340) {
+            SoundManager.playSFX('confirm');
+            difficulty = 'EASY';
+            selectMode('pve');
+        } else if (pos.x >= 370 && pos.x <= 520 && pos.y >= 250 && pos.y <= 340) {
+            SoundManager.playSFX('confirm');
+            difficulty = 'MEDIUM';
+            selectMode('pve');
+        } else if (pos.x >= 560 && pos.x <= 710 && pos.y >= 250 && pos.y <= 340) {
+            SoundManager.playSFX('confirm');
+            difficulty = 'HARD';
+            selectMode('pve');
+        } else if (pos.x >= 350 && pos.x <= 550 && pos.y >= 400 && pos.y <= 445) {
+            SoundManager.playSFX('menuClick');
+            currentState = 'MENU';
         }
-
-
-        if (
-            keys.hasOwnProperty(key) &&
-            key !== ' '
-        ) {
-
-            keys[key] = false;
-
+    } else if (currentState === 'INSTRUCTIONS' || currentState === 'SETTINGS') {
+        // Handle settings toggles via touch
+        if (currentState === 'SETTINGS') {
+            // Music toggle button
+            const musicBtn = { x: 350, y: 305, w: 200, h: 40 };
+            const sfxBtn = { x: 350, y: 360, w: 200, h: 40 };
+            if (pos.x >= musicBtn.x && pos.x <= musicBtn.x + musicBtn.w &&
+                pos.y >= musicBtn.y && pos.y <= musicBtn.y + musicBtn.h) {
+                SoundManager.toggleMusic();
+                SoundManager.playSFX('menuClick', 0.3);
+                return;
+            }
+            if (pos.x >= sfxBtn.x && pos.x <= sfxBtn.x + sfxBtn.w &&
+                pos.y >= sfxBtn.y && pos.y <= sfxBtn.y + sfxBtn.h) {
+                SoundManager.toggleSFX();
+                SoundManager.playSFX('menuClick', 0.3);
+                return;
+            }
         }
-
-
-        if (
-            keys.hasOwnProperty(e.key)
-        ) {
-
-            keys[e.key] = false;
-
+        SoundManager.playSFX('menuClick');
+        currentState = 'MENU';
+    } else if (currentState === 'MATCH_END') {
+        SoundManager.playSFX('menuClick');
+        currentState = 'MENU';
+    } else if (currentState === 'PAUSED') {
+        // Check pause menu buttons
+        const resumeBtn = { x: 350, y: 235, w: 200, h: 50 };
+        const menuBtn = { x: 350, y: 295, w: 200, h: 50 };
+        const musicToggleBtn = { x: 330, y: 385, w: 110, h: 35 };
+        const sfxToggleBtn = { x: 460, y: 385, w: 110, h: 35 };
+        if (pos.x >= resumeBtn.x && pos.x <= resumeBtn.x + resumeBtn.w &&
+            pos.y >= resumeBtn.y && pos.y <= resumeBtn.y + resumeBtn.h) {
+            SoundManager.playSFX('menuClick');
+            togglePause();
+        } else if (pos.x >= menuBtn.x && pos.x <= menuBtn.x + menuBtn.w &&
+                   pos.y >= menuBtn.y && pos.y <= menuBtn.y + menuBtn.h) {
+            SoundManager.playSFX('menuClick');
+            currentState = 'MENU';
+            updateTouchUI();
+        } else if (pos.x >= musicToggleBtn.x && pos.x <= musicToggleBtn.x + musicToggleBtn.w &&
+                   pos.y >= musicToggleBtn.y && pos.y <= musicToggleBtn.y + musicToggleBtn.h) {
+            SoundManager.toggleMusic();
+            SoundManager.playSFX('menuClick', 0.3);
+        } else if (pos.x >= sfxToggleBtn.x && pos.x <= sfxToggleBtn.x + sfxToggleBtn.w &&
+                   pos.y >= sfxToggleBtn.y && pos.y <= sfxToggleBtn.y + sfxToggleBtn.h) {
+            SoundManager.toggleSFX();
+            SoundManager.playSFX('menuClick', 0.3);
         }
-
     }
-);
+    updateTouchUI();
+});
 
+canvas.addEventListener('pointermove', (e) => {
+    const pos = getCanvasTouchPos(e);
+    pauseButton.hover = (pos.x >= 860 && pos.x <= 890 && pos.y >= 15 && pos.y <= 45);
+});
 
-// =========================================================
-// PREVENT STUCK KEYS
-// =========================================================
-
-window.addEventListener(
-    'blur',
-    function () {
-
-        for (
-            let key in keys
-        ) {
-
-            keys[key] = false;
-
-        }
-
+function togglePause() {
+    if (currentState === 'PLAY') {
+        currentState = 'PAUSED';
+        SoundManager.playSFX('menuClick');
+    } else if (currentState === 'PAUSED') {
+        currentState = 'PLAY';
+        SoundManager.playSFX('menuClick');
     }
-);
+    updateTouchUI();
+}
 
+function selectMode(mode) {
+    gameMode = mode;
+    kickoffTeam = 'red';
+    nextKickoffTeam = 'red';
+    initMatch();
+    currentState = 'PLAY';
+    updateTouchUI();
+    // Update music for match
+    SoundManager.updateMusicForState(currentState);
+}
 
-// =========================================================
-// CREATE PLAYERS
-// =========================================================
+function updateTouchUI() {
+    if (currentState === 'PLAY' && isMobileDevice) {
+        touchControlsElem.style.display = 'block';
+        touchControlsElem.className = 'touch-controls is-active mode-' + gameMode;
+    } else {
+        touchControlsElem.style.display = 'none';
+    }
+    // Update music based on state
+    SoundManager.updateMusicForState(currentState);
+}
+
+// ─── TOUCH JOYSTICKS ───
+function setupJoystick(baseElem, updateKeys) {
+    let touchId = null;
+    let baseRect = null;
+    const stickElem = baseElem.querySelector('.joystick-stick');
+    
+    baseElem.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        initSoundOnInteraction();
+        if (touchId !== null) return;
+        const touch = e.changedTouches[0];
+        touchId = touch.identifier;
+        baseRect = baseElem.getBoundingClientRect();
+        handleMove(touch);
+    }, { passive: false });
+    
+    window.addEventListener('touchmove', (e) => {
+        if (touchId === null) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchId) {
+                handleMove(e.changedTouches[i]);
+                break;
+            }
+        }
+    }, { passive: false });
+    
+    const resetJoystick = (e) => {
+        if (touchId === null) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchId) {
+                touchId = null;
+                stickElem.style.transform = 'translate(0px, 0px)';
+                updateKeys(false, false, false, false);
+                break;
+            }
+        }
+    };
+    
+    window.addEventListener('touchend', resetJoystick);
+    window.addEventListener('touchcancel', resetJoystick);
+    
+    function handleMove(touch) {
+        const centerX = baseRect.left + baseRect.width / 2;
+        const centerY = baseRect.top + baseRect.height / 2;
+        let deltaX = touch.clientX - centerX;
+        let deltaY = touch.clientY - centerY;
+        let dist = Math.hypot(deltaX, deltaY);
+        const maxDist = 35;
+        if (dist > maxDist) {
+            deltaX = (deltaX / dist) * maxDist;
+            deltaY = (deltaY / dist) * maxDist;
+        }
+        stickElem.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        const threshold = 10;
+        updateKeys(
+            deltaY < -threshold,
+            deltaY > threshold,
+            deltaX < -threshold,
+            deltaX > threshold
+        );
+    }
+}
+
+setupJoystick(document.getElementById('p1Joystick'), (up, down, left, right) => {
+    keys.w = up; keys.s = down; keys.a = left; keys.d = right;
+});
+
+setupJoystick(document.getElementById('p2Joystick'), (up, down, left, right) => {
+    keys.ArrowUp = up; keys.ArrowDown = down; keys.ArrowLeft = left; keys.ArrowRight = right;
+});
+
+function bindShootButton(btnElem, keyName) {
+    const press = (e) => {
+        e.preventDefault();
+        initSoundOnInteraction();
+        keys[keyName] = true;
+    };
+    const release = (e) => {
+        e.preventDefault();
+        keys[keyName] = false;
+    };
+    btnElem.addEventListener('touchstart', press, { passive: false });
+    btnElem.addEventListener('touchend', release);
+    btnElem.addEventListener('touchcancel', release);
+    btnElem.addEventListener('mousedown', press);
+    btnElem.addEventListener('mouseup', release);
+}
+
+bindShootButton(document.getElementById('p1Shoot'), 'space');
+bindShootButton(document.getElementById('p2Shoot'), 'enter');
+
+// ─── GAME SETUP & LOGIC ───
 
 function createPlayers() {
-
     players = [];
-
-
-    // RED TEAM
-
-    players.push({
-
-        id: 0,
-
-        team: 'red',
-
-        x: 50,
-        y: 300,
-
-        radius: 16,
-
-        color: '#e74c3c',
-
-        gradColor: '#c0392b',
-
-        isGk: true,
-
-        num: '1'
-
-    });
-
-
-    players.push({
-
-        id: 1,
-
-        team: 'red',
-
-        x: 250,
-        y: 150,
-
-        radius: 16,
-
-        color: '#ff5252',
-
-        gradColor: '#d63031',
-
-        isGk: false,
-
-        num: '7'
-
-    });
-
-
-    players.push({
-
-        id: 2,
-
-        team: 'red',
-
-        x: 250,
-        y: 450,
-
-        radius: 16,
-
-        color: '#ff5252',
-
-        gradColor: '#d63031',
-
-        isGk: false,
-
-        num: '9'
-
-    });
-
-
-    players.push({
-
-        id: 3,
-
-        team: 'red',
-
-        x: 380,
-        y: 300,
-
-        radius: 16,
-
-        color: '#ff5252',
-
-        gradColor: '#d63031',
-
-        isGk: false,
-
-        num: '10'
-
-    });
-
-
-    // BLUE TEAM
-
-    players.push({
-
-        id: 4,
-
-        team: 'blue',
-
-        x: 850,
-        y: 300,
-
-        radius: 16,
-
-        color: '#3498db',
-
-        gradColor: '#2980b9',
-
-        isGk: true,
-
-        num: '1'
-
-    });
-
-
-    players.push({
-
-        id: 5,
-
-        team: 'blue',
-
-        x: 650,
-        y: 150,
-
-        radius: 16,
-
-        color: '#48dbfb',
-
-        gradColor: '#0984e3',
-
-        isGk: false,
-
-        num: '8'
-
-    });
-
-
-    players.push({
-
-        id: 6,
-
-        team: 'blue',
-
-        x: 650,
-        y: 450,
-
-        radius: 16,
-
-        color: '#48dbfb',
-
-        gradColor: '#0984e3',
-
-        isGk: false,
-
-        num: '11'
-
-    });
-
-
-    players.push({
-
-        id: 7,
-
-        team: 'blue',
-
-        x: 520,
-        y: 300,
-
-        radius: 16,
-
-        color: '#48dbfb',
-
-        gradColor: '#0984e3',
-
-        isGk: false,
-
-        num: '10'
-
-    });
-
-}
-
-
-// =========================================================
-// INIT GAME
-// =========================================================
-
-function initGame() {
-
-    score = {
-
-        red: 0,
-
-        blue: 0
-
+    const create = (id, team, x, y, isGk, num, col, gradCol) => {
+        return {
+            id, team, x, y, radius: 16, color: col, gradColor: gradCol,
+            isGk, num, ejecting: false, ejectTargetX: 0, ejectTargetY: 0
+        };
     };
-
-    nextKickoffTeam = null;
-
-    resetField();
-
+    players.push(create(0, 'red', 50, 300, true, '1', '#e74c3c', '#c0392b'));
+    players.push(create(1, 'red', 250, 150, false, '7', '#ff5252', '#d63031'));
+    players.push(create(2, 'red', 250, 450, false, '9', '#ff5252', '#d63031'));
+    players.push(create(3, 'red', 380, 300, false, '10', '#ff5252', '#d63031'));
+    players.push(create(4, 'blue', 850, 300, true, '1', '#3498db', '#2980b9'));
+    players.push(create(5, 'blue', 650, 150, false, '8', '#48dbfb', '#0984e3'));
+    players.push(create(6, 'blue', 650, 450, false, '11', '#48dbfb', '#0984e3'));
+    players.push(create(7, 'blue', 520, 300, false, '10', '#48dbfb', '#0984e3'));
 }
 
-
-// =========================================================
-// RESET FIELD
-// =========================================================
+function initMatch() {
+    score = { red: 0, blue: 0 };
+    nextKickoffTeam = kickoffTeam;
+    matchClock = halfDuration;
+    currentHalf = 1;
+    matchState = 'PLAY';
+    halftimeTimer = 0;
+    kickoffDelay = 0.5;
+    resetField();
+}
 
 function resetField() {
-
     createPlayers();
-
-
-    ball.x = 450;
-
-    ball.y = 300;
-
-    ball.vx = 0;
-
-    ball.vy = 0;
-
+    ball.x = 450; ball.y = 300;
+    ball.vx = 0; ball.vy = 0;
     ball.cooldownPlayer = null;
-
     ball.cooldownTimer = 0;
-
-
-    let outfielders =
-        players.filter(
-            p => !p.isGk
-        );
-
-
-    if (
-        nextKickoffTeam
-    ) {
-
-        outfielders =
-            outfielders.filter(
-                p =>
-                    p.team ===
-                    nextKickoffTeam
-            );
-
+    aiTimer = 0;
+    aiDribbleTime = 0;
+    aiPassCooldown = 0;
+    aiHoldBallTimer = 0;
+    aiState = 'CHASE';
+    aiStateTimer = 0;
+    gkTimer = 0;
+    aiStartDelay = 60;
+    aiReactionTimer = 20;
+    activeLocks.red = { player: null, timer: 0 };
+    activeLocks.blue = { player: null, timer: 0 };
+    let outfielders = players.filter(p => !p.isGk);
+    if (nextKickoffTeam) {
+        outfielders = outfielders.filter(p => p.team === nextKickoffTeam);
     }
-
-
-    ball.owner =
-        outfielders[
-            Math.floor(
-                Math.random() *
-                outfielders.length
-            )
-        ];
-
+    ball.owner = outfielders[Math.floor(Math.random() * outfielders.length)];
 }
 
-
-// =========================================================
-// GOAL CONFETTI
-// =========================================================
-
-function spawnGoalConfetti() {
-
+function spawnGoalConfetti(originX, originY) {
     particles = [];
-
-
-    const colors = [
-
-        '#f1c40f',
-
-        '#e74c3c',
-
-        '#3498db',
-
-        '#2ecc71',
-
-        '#e056fd',
-
-        '#ffffff'
-
-    ];
-
-
-    for (
-        let i = 0;
-        i < 90;
-        i++
-    ) {
-
+    const colors = ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71', '#e056fd', '#ffffff', '#ff9f43'];
+    for (let i = 0; i < 140; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let speed = Math.random() * 22 + 4;
         particles.push({
-
-            x: 450,
-
-            y: 250,
-
-            vx:
-                (Math.random() - 0.5) *
-                16,
-
-            vy:
-                (Math.random() - 0.7) *
-                16,
-
-            size:
-                Math.random() *
-                7 +
-                4,
-
-            color:
-                colors[
-                    Math.floor(
-                        Math.random() *
-                        colors.length
-                    )
-                ],
-
-            rotation:
-                Math.random() *
-                Math.PI *
-                2,
-
-            vRot:
-                (Math.random() - 0.5) *
-                0.2,
-
-            life: 100
-
+            x: originX, y: originY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: Math.random() * 8 + 4,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            rotation: Math.random() * Math.PI * 2,
+            vRot: (Math.random() - 0.5) * 0.3,
+            life: 110
         });
-
     }
-
 }
-
-
-// =========================================================
-// UPDATE PARTICLES
-// =========================================================
 
 function updateParticles() {
-
-    for (
-        let i =
-            particles.length - 1;
-
-        i >= 0;
-
-        i--
-    ) {
-
-        let p =
-            particles[i];
-
-
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
         p.x += p.vx;
-
         p.y += p.vy;
-
-        p.vy += 0.25;
-
+        p.vy += 0.22;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
         p.rotation += p.vRot;
-
         p.life--;
-
-
-        if (
-            p.life <= 0
-        ) {
-
-            particles.splice(
-                i,
-                1
-            );
-
-        }
-
+        if (p.life <= 0) particles.splice(i, 1);
     }
-
 }
 
-
-// =========================================================
-// STAR
-// =========================================================
-
-function drawStar(
-    cx,
-    cy,
-    spikes,
-    outerRadius,
-    innerRadius
-) {
-
-    let rot =
-        Math.PI / 2 * 3;
-
-    let x = cx;
-
-    let y = cy;
-
-    let step =
-        Math.PI /
-        spikes;
-
-
+function drawStar(cx, cy, spikes, outerRadius, innerRadius) {
+    let rot = Math.PI / 2 * 3;
+    let x = cx, y = cy;
+    let step = Math.PI / spikes;
     ctx.beginPath();
-
-    ctx.moveTo(
-        cx,
-        cy - outerRadius
-    );
-
-
-    for (
-        let i = 0;
-        i < spikes;
-        i++
-    ) {
-
-        x =
-            cx +
-            Math.cos(rot) *
-            outerRadius;
-
-        y =
-            cy +
-            Math.sin(rot) *
-            outerRadius;
-
-        ctx.lineTo(
-            x,
-            y
-        );
-
-
+    ctx.moveTo(cx, cy - outerRadius);
+    for (let i = 0; i < spikes; i++) {
+        x = cx + Math.cos(rot) * outerRadius;
+        y = cy + Math.sin(rot) * outerRadius;
+        ctx.lineTo(x, y);
         rot += step;
-
-
-        x =
-            cx +
-            Math.cos(rot) *
-            innerRadius;
-
-        y =
-            cy +
-            Math.sin(rot) *
-            innerRadius;
-
-        ctx.lineTo(
-            x,
-            y
-        );
-
-
+        x = cx + Math.cos(rot) * innerRadius;
+        y = cy + Math.sin(rot) * innerRadius;
+        ctx.lineTo(x, y);
         rot += step;
-
     }
-
-
-    ctx.lineTo(
-        cx,
-        cy - outerRadius
-    );
-
+    ctx.lineTo(cx, cy - outerRadius);
     ctx.closePath();
-
-
-    ctx.fillStyle =
-        '#f1c40f';
-
+    ctx.fillStyle = '#f1c40f';
     ctx.fill();
-
 }
-
-
-// =========================================================
-// GET ACTIVE PLAYER
-// =========================================================
 
 function getActivePlayer(team) {
-
-    if (
-        ball.owner &&
-        ball.owner.team === team
-    ) {
-
-        return ball.owner;
-
+    if (ball.owner && ball.owner.team === team) return ball.owner;
+    let lock = activeLocks[team];
+    if (lock.timer > 0 && lock.player && !lock.player.ejecting) {
+        return lock.player;
     }
-
-
-    let closest = null;
-
-    let minDist = Infinity;
-
-
-    for (
-        let p of players
-    ) {
-
-        if (
-            p.team === team &&
-            !p.isGk
-        ) {
-
-            let dist =
-                Math.hypot(
-                    p.x - ball.x,
-                    p.y - ball.y
-                );
-
-
-            if (
-                dist < minDist
-            ) {
-
-                minDist = dist;
-
-                closest = p;
-
-            }
-
-        }
-
+    let eligible = players.filter(p => p.team === team && !p.isGk && !p.ejecting);
+    if (eligible.length === 0) return null;
+    let candidates = eligible.map(p => {
+        return { player: p, dist: Math.hypot(p.x - ball.x, p.y - ball.y) };
+    });
+    candidates.sort((a, b) => a.dist - b.dist);
+    let chosen = candidates[0].player;
+    let threshold = 25;
+    let equidistantGroup = candidates.filter(c => c.dist - candidates[0].dist <= threshold);
+    if (equidistantGroup.length >= 2) {
+        let randomIndex = Math.floor(Math.random() * equidistantGroup.length);
+        chosen = equidistantGroup[randomIndex].player;
+        lock.player = chosen;
+        lock.timer = 18;
+    } else {
+        lock.player = chosen;
+        lock.timer = 0;
     }
-
-
-    return closest;
-
+    return chosen;
 }
 
-
-// =========================================================
-// SHOOT BALL
-// =========================================================
-
-function shootBall(
-    passer
-) {
-
-    let spawnDistance =
-        passer.radius +
-        ball.radius +
-        6;
-
-
-    ball.x =
-        passer.x +
-        Math.cos(
-            arrowAngle
-        ) *
-        spawnDistance;
-
-
-    ball.y =
-        passer.y +
-        Math.sin(
-            arrowAngle
-        ) *
-        spawnDistance;
-
-
-    ball.vx =
-        Math.cos(
-            arrowAngle
-        ) *
-        ball.speed;
-
-
-    ball.vy =
-        Math.sin(
-            arrowAngle
-        ) *
-        ball.speed;
-
-
-    ball.cooldownPlayer =
-        passer;
-
-
-    ball.cooldownTimer =
-        20;
-
-
+function shootBall(passer) {
+    // Play kick sound (but NOT if this is a GK steal - we track that with a flag)
+    if (!window._gkStealInProgress) {
+        SoundManager.playSFX('kick', 0.8);
+    }
+    
+    let spawnDistance = passer.radius + ball.radius + 6;
+    ball.x = passer.x + Math.cos(arrowAngle) * spawnDistance;
+    ball.y = passer.y + Math.sin(arrowAngle) * spawnDistance;
+    ball.vx = Math.cos(arrowAngle) * ball.speed;
+    ball.vy = Math.sin(arrowAngle) * ball.speed;
+    ball.cooldownPlayer = passer;
+    ball.cooldownTimer = 20;
     ball.owner = null;
-
+    if (passer.isGk) gkTimer = 0;
+    aiReactionTimer = 20;
 }
 
-
-// =========================================================
-// GOAL
-// =========================================================
-
-function triggerGoal(
-    scorerText,
-    concedingTeam
-) {
-
-    lastScorer =
-        scorerText;
-
-    nextKickoffTeam =
-        concedingTeam;
-
-    currentState =
-        'GOAL_SCORED';
-
-    spawnGoalConfetti();
-
-}
-
-
-// =========================================================
-// BOX COLLISION
-// =========================================================
-
-function resolveBoxCollision(
-    player,
-    box
-) {
-
-    let closestX =
-        Math.max(
-            box.minX,
-            Math.min(
-                player.x,
-                box.maxX
-            )
-        );
-
-
-    let closestY =
-        Math.max(
-            box.minY,
-            Math.min(
-                player.y,
-                box.maxY
-            )
-        );
-
-
-    let dx =
-        player.x -
-        closestX;
-
-
-    let dy =
-        player.y -
-        closestY;
-
-
-    let distance =
-        Math.hypot(
-            dx,
-            dy
-        );
-
-
-    if (
-        distance <
-        player.radius
-    ) {
-
-        if (
-            distance === 0
-        ) {
-
-            let dLeft =
-                Math.abs(
-                    player.x -
-                    box.minX
-                );
-
-
-            let dRight =
-                Math.abs(
-                    player.x -
-                    box.maxX
-                );
-
-
-            let dTop =
-                Math.abs(
-                    player.y -
-                    box.minY
-                );
-
-
-            let dBottom =
-                Math.abs(
-                    player.y -
-                    box.maxY
-                );
-
-
-            let min =
-                Math.min(
-                    dLeft,
-                    dRight,
-                    dTop,
-                    dBottom
-                );
-
-
-            if (
-                min === dLeft
-            ) {
-
-                player.x =
-                    box.minX -
-                    player.radius;
-
-            }
-
-            else if (
-                min === dRight
-            ) {
-
-                player.x =
-                    box.maxX +
-                    player.radius;
-
-            }
-
-            else if (
-                min === dTop
-            ) {
-
-                player.y =
-                    box.minY -
-                    player.radius;
-
-            }
-
-            else {
-
-                player.y =
-                    box.maxY +
-                    player.radius;
-
-            }
-
+function doAiGkPass(gk) {
+    if (Math.random() < 0.50) {
+        let teammates = players.filter(p => p.team === gk.team && !p.isGk);
+        let target = teammates[Math.floor(Math.random() * teammates.length)];
+        if (target) {
+            arrowAngle = Math.atan2(target.y - gk.y, target.x - gk.x);
+        } else {
+            arrowAngle = Math.atan2((Math.random() - 0.5), -1);
         }
-
-        else {
-
-            let overlap =
-                player.radius -
-                distance;
-
-
-            player.x +=
-                (dx / distance) *
-                overlap;
-
-
-            player.y +=
-                (dy / distance) *
-                overlap;
-
-        }
-
+    } else {
+        arrowAngle = Math.atan2((Math.random() - 0.5), -1);
     }
-
+    shootBall(gk);
 }
 
+function triggerGoal(scorerText, concedingTeam, originX, originY) {
+    // Play goal sounds and stop crowd
+    SoundManager.playGoalSounds();
+    
+    lastScorer = scorerText;
+    nextKickoffTeam = concedingTeam;
+    goalZoomScale = 2.8;
+    screenShake = { duration: 32, intensity: 22, x: 0, y: 0 };
+    
+    if (gameWrapperElem) {
+        gameWrapperElem.classList.remove('shake-impact');
+        void gameWrapperElem.offsetWidth;
+        gameWrapperElem.classList.add('shake-impact');
+    }
+    
+    if (goalFlashElem) {
+        goalFlashElem.classList.remove('active');
+        void goalFlashElem.offsetWidth;
+        goalFlashElem.classList.add('active');
+    }
+    
+    updateTouchUI();
+    spawnGoalConfetti(originX, originY);
+}
 
-// =========================================================
-// GAME UPDATE
-// =========================================================
+function resolveBoxCollision(player, box) {
+    let closestX = Math.max(box.minX, Math.min(player.x, box.maxX));
+    let closestY = Math.max(box.minY, Math.min(player.y, box.maxY));
+    let dx = player.x - closestX;
+    let dy = player.y - closestY;
+    let distance = Math.hypot(dx, dy);
+    if (distance < player.radius) {
+        if (distance === 0) {
+            let dLeft = Math.abs(player.x - box.minX);
+            let dRight = Math.abs(player.x - box.maxX);
+            let dTop = Math.abs(player.y - box.minY);
+            let dBottom = Math.abs(player.y - box.maxY);
+            let min = Math.min(dLeft, dRight, dTop, dBottom);
+            if (min === dLeft) player.x = box.minX - player.radius;
+            else if (min === dRight) player.x = box.maxX + player.radius;
+            else if (min === dTop) player.y = box.minY - player.radius;
+            else player.y = box.maxY + player.radius;
+        } else {
+            let overlap = player.radius - distance;
+            player.x += (dx / distance) * overlap;
+            player.y += (dy / distance) * overlap;
+        }
+    }
+}
 
-function update() {
+function getEjectTarget(player, box) {
+    let dLeft = Math.abs(player.x - box.minX);
+    let dRight = Math.abs(player.x - box.maxX);
+    let dTop = Math.abs(player.y - box.minY);
+    let dBottom = Math.abs(player.y - box.maxY);
+    let min = Math.min(dLeft, dRight, dTop, dBottom);
+    let targetX = player.x;
+    let targetY = player.y;
+    
+    if (min === dLeft) {
+        targetX = box.minX - player.radius - 5;
+    } else if (min === dRight) {
+        targetX = box.maxX + player.radius + 5;
+    } else if (min === dTop) {
+        targetY = box.minY - player.radius - 5;
+    } else {
+        targetY = box.maxY + player.radius + 5;
+    }
+    
+    const PADDING = 25;
+    targetX = Math.max(PADDING + player.radius, Math.min(875 - player.radius, targetX));
+    targetY = Math.max(PADDING + player.radius, Math.min(580 - player.radius, targetY));
+    
+    if (box.maxX === 125) {
+        targetX = Math.max(130, targetX);
+    }
+    if (box.minX === 775) {
+        targetX = Math.min(770, targetX);
+    }
+    
+    return { x: targetX, y: targetY };
+}
 
+// ─── AI DIFFICULTY CONFIG ───
+function getAIConfig() {
+    if (difficulty === 'EASY') {
+        return {
+            speedMultiplier: 0.58,
+            shootRange: 360,
+            panicTimer: 120,
+            perfectShotRate: 0.35,
+            missError: 0.5,
+            passTriggerDist: 70,
+            perfectPassRate: 0.50,
+            passError: 1.2,
+            passCooldown: 140,
+            gkHoldTime: 360,
+            reactionDelay: 20,
+            chaseRate: 0.30,
+            retreatRate: 0.50,
+            hesitateRate: 0.20,
+            lockThreshold: 25,
+            lockTimer: 18,
+            stateSwitchCooldown: 20,
+            movementSmoothness: 0.3
+        };
+    } else if (difficulty === 'MEDIUM') {
+        return {
+            speedMultiplier: 0.72,
+            shootRange: 360,
+            panicTimer: 100,
+            perfectShotRate: 0.45,
+            missError: 0.5,
+            passTriggerDist: 100,
+            perfectPassRate: 0.60,
+            passError: 1.0,
+            passCooldown: 110,
+            gkHoldTime: 360,
+            reactionDelay: 12,
+            chaseRate: 0.45,
+            retreatRate: 0.35,
+            hesitateRate: 0.20,
+            lockThreshold: 25,
+            lockTimer: 18,
+            stateSwitchCooldown: 15,
+            movementSmoothness: 0.4
+        };
+    } else {
+        return {
+            speedMultiplier: 0.86,
+            shootRange: 360,
+            panicTimer: 80,
+            perfectShotRate: 0.55,
+            missError: 0.4,
+            passTriggerDist: 130,
+            perfectPassRate: 0.70,
+            passError: 0.8,
+            passCooldown: 80,
+            gkHoldTime: 360,
+            reactionDelay: 6,
+            chaseRate: 0.60,
+            retreatRate: 0.25,
+            hesitateRate: 0.15,
+            lockThreshold: 25,
+            lockTimer: 18,
+            stateSwitchCooldown: 10,
+            movementSmoothness: 0.5
+        };
+    }
+}
+
+// ─── UPDATE FUNCTION ───
+function update(dt) {
+    if (currentState === 'PAUSED') return;
+    const ai = getAIConfig();
     updateParticles();
-
-
-    // GOAL STATE
-
-    if (
-        currentState ===
-        'GOAL_SCORED'
-    ) {
-
-        goalBannerTimer++;
-
-
-        if (
-            goalBannerTimer >
-            110
-        ) {
-
+    
+    if (screenShake.duration > 0) {
+        screenShake.duration--;
+        let damp = screenShake.duration / 32;
+        screenShake.x = (Math.random() - 0.5) * screenShake.intensity * damp;
+        screenShake.y = (Math.random() - 0.5) * screenShake.intensity * damp;
+    } else {
+        screenShake.x = 0;
+        screenShake.y = 0;
+    }
+    
+    if (goalZoomScale > 1.0) {
+        goalZoomScale += (1.0 - goalZoomScale) * 0.16;
+    }
+    
+    if (currentState === 'MATCH_END') {
+        return;
+    }
+    
+    if (matchState === 'HALFTIME') {
+        halftimeTimer -= dt;
+        if (halftimeTimer <= 0) {
+            // Play whistle for second half start
+            SoundManager.playSFX('whistleStart', 0.7);
+            currentHalf = 2;
+            matchClock = halfDuration;
+            matchState = 'PLAY';
+            kickoffDelay = 0.5;
+            nextKickoffTeam = (kickoffTeam === 'red') ? 'blue' : 'red';
+            resetField();
+            // Restart crowd
+            SoundManager.resumeCrowd();
+        }
+        return;
+    }
+    
+    if (currentState === 'GOAL_SCORED') {
+        goalBannerTimer += dt * 60;
+        if (goalBannerTimer > 110) {
             goalBannerTimer = 0;
-
-
-            if (
-                score.red >=
-                    maxScore ||
-                score.blue >=
-                    maxScore
-            ) {
-
-                alert(
-
-                    (
-                        score.red >=
-                        maxScore
-                    )
-                        ? "RED TEAM WINS THE MATCH!"
-                        : "BLUE TEAM WINS THE MATCH!"
-
-                );
-
-
-                currentState =
-                    'MENU';
-
-            }
-
-            else {
-
-                resetField();
-
-                currentState =
-                    'PLAY';
-
-            }
-
+            resetField();
+            currentState = 'PLAY';
+            // Resume crowd after goal celebration
+            SoundManager.resumeCrowd();
+            // Play whistle for new play after goal
+            SoundManager.playSFX('whistleStart', 0.7);
         }
-
-
         return;
-
     }
-
-
-    if (
-        currentState !==
-        'PLAY'
-    ) {
-
-        return;
-
+    
+    if (currentState !== 'PLAY') return;
+    
+    if (kickoffDelay > 0) {
+        // Play whistle at kickoff start (only once)
+        if (kickoffDelay < 0.1 && kickoffDelay > 0) {
+            SoundManager.playSFX('whistleStart', 0.7);
+        }
+        kickoffDelay -= dt;
+    } else {
+        matchClock -= dt;
+        if (matchClock <= 0) {
+            matchClock = 0;
+            if (currentHalf === 1) {
+                // Half-time whistle (stop)
+                SoundManager.playSFX('whistleStop', 0.7);
+                matchState = 'HALFTIME';
+                halftimeTimer = HALFTIME_BREAK;
+                return;
+            } else {
+                // Match end whistle (stop)
+                SoundManager.playSFX('whistleStop', 0.7);
+                // Play victory or defeat music
+                const isVSComputer = gameMode === 'pve';
+                const winner = (score.red > score.blue) ? 'RED' : (score.blue > score.red) ? 'BLUE' : 'DRAW';
+                
+                if (isVSComputer) {
+                    if (winner === 'RED') {
+                        SoundManager.playMusic('victory');
+                    } else {
+                        SoundManager.playMusic('defeat');
+                    }
+                } else {
+                    // 1v1: Always play victory music
+                    SoundManager.playMusic('victory');
+                }
+                
+                matchState = 'MATCH_END';
+                currentState = 'MATCH_END';
+                let winnerText = '';
+                if (score.red > score.blue) winnerText = 'RED TEAM WINS!';
+                else if (score.blue > score.red) winnerText = 'BLUE TEAM WINS!';
+                else winnerText = 'DRAW!';
+                lastScorer = winnerText;
+                return;
+            }
+        }
     }
-
-
-    // BALL COOLDOWN
-
-    if (
-        ball.cooldownTimer >
-        0
-    ) {
-
+    
+    // ─── REST OF GAME LOGIC ───
+    if (activeLocks.red.timer > 0) activeLocks.red.timer--;
+    if (activeLocks.blue.timer > 0) activeLocks.blue.timer--;
+    
+    for (let p of players) {
+        if (p.ejecting) {
+            let dx = p.ejectTargetX - p.x;
+            let dy = p.ejectTargetY - p.y;
+            let dist = Math.hypot(dx, dy);
+            if (dist < 5) {
+                p.x = p.ejectTargetX;
+                p.y = p.ejectTargetY;
+                p.ejecting = false;
+            } else {
+                let speed = 5 + (dist * 0.05);
+                if (speed > 8) speed = 8;
+                p.x += (dx / dist) * speed;
+                p.y += (dy / dist) * speed;
+            }
+        }
+    }
+    
+    if (ball.cooldownTimer > 0) {
         ball.cooldownTimer--;
-
-
-        if (
-            ball.cooldownTimer <=
-            0
-        ) {
-
-            ball.cooldownPlayer =
-                null;
-
-        }
-
+        if (ball.cooldownTimer <= 0) ball.cooldownPlayer = null;
     }
-
-
-    // =====================================================
-    // GOALKEEPER PATROL
-    // =====================================================
-
-    for (
-        let p of players
-    ) {
-
-        if (
-            p.isGk &&
-            ball.owner !== p
-        ) {
-
-            let dir =
-                p.team === 'red'
-                    ? gkDirection.red
-                    : gkDirection.blue;
-
-
-            p.y +=
-                gkSpeed *
-                dir;
-
-
-            if (
-                p.y < 210 ||
-                p.y > 390
-            ) {
-
-                if (
-                    p.team ===
-                    'red'
-                ) {
-
-                    gkDirection.red *=
-                        -1;
-
-                }
-
-                else {
-
-                    gkDirection.blue *=
-                        -1;
-
-                }
-
+    
+    if (aiStartDelay > 0) aiStartDelay--;
+    if (aiReactionTimer > 0) aiReactionTimer--;
+    if (aiPassCooldown > 0) aiPassCooldown--;
+    
+    for (let p of players) {
+        if (p.isGk && ball.owner !== p) {
+            if (p.team === 'red') {
+                p.y += gkSpeed * gkDirection.red;
+                if (p.y <= 210) { p.y = 210; gkDirection.red = 1; }
+                else if (p.y >= 390) { p.y = 390; gkDirection.red = -1; }
+                p.x = 50;
+            } else {
+                p.y += gkSpeed * gkDirection.blue;
+                if (p.y <= 210) { p.y = 210; gkDirection.blue = 1; }
+                else if (p.y >= 390) { p.y = 390; gkDirection.blue = -1; }
+                p.x = 850;
             }
-
-
-            p.x =
-                p.team === 'red'
-                    ? 50
-                    : 850;
-
         }
-
     }
-
-
-    let activeRed =
-        getActivePlayer(
-            'red'
-        );
-
-
-    let activeBlue =
-        getActivePlayer(
-            'blue'
-        );
-
-
-    let playerSpeed =
-        4.5;
-
-
-    let redGkHasBall =
-        ball.owner &&
-        ball.owner.team ===
-            'red' &&
-        ball.owner.isGk;
-
-
-    let blueGkHasBall =
-        ball.owner &&
-        ball.owner.team ===
-            'blue' &&
-        ball.owner.isGk;
-
-
-    // =====================================================
-    // RED PLAYER
-    // =====================================================
-
-    if (
-        activeRed
-    ) {
-
-        let nextX =
-            activeRed.x;
-
-        let nextY =
-            activeRed.y;
-
-
-        if (
-            keys.w
-        ) {
-
-            nextY -=
-                playerSpeed;
-
+    
+    let activeRed = getActivePlayer('red');
+    let activeBlue = getActivePlayer('blue');
+    let playerSpeed = 4.5;
+    let redGkHasBall = ball.owner && ball.owner.team === 'red' && ball.owner.isGk;
+    let blueGkHasBall = ball.owner && ball.owner.team === 'blue' && ball.owner.isGk;
+    
+    if (activeRed && !activeRed.ejecting) {
+        let nextX = activeRed.x, nextY = activeRed.y;
+        if (keys.w) nextY -= playerSpeed;
+        if (keys.s) nextY += playerSpeed;
+        if (keys.a) nextX -= playerSpeed;
+        if (keys.d) nextX += playerSpeed;
+        activeRed.x = nextX;
+        activeRed.y = nextY;
+        if (activeRed.isGk) {
+            activeRed.x = Math.max(25 + activeRed.radius, Math.min(100 - activeRed.radius, activeRed.x));
+            activeRed.y = Math.max(150 + activeRed.radius, Math.min(450 - activeRed.radius, activeRed.y));
+        } else {
+            activeRed.x = Math.max(25 + activeRed.radius, Math.min(875 - activeRed.radius, activeRed.x));
+            activeRed.y = Math.max(activeRed.radius, Math.min(canvas.height - activeRed.radius, activeRed.y));
+            if (blueGkHasBall) {
+                resolveBoxCollision(activeRed, { minX: 775, maxX: 875, minY: 150, maxY: 450 });
+            }
         }
-
-
-        if (
-            keys.s
-        ) {
-
-            nextY +=
-                playerSpeed;
-
-        }
-
-
-        if (
-            keys.a
-        ) {
-
-            nextX -=
-                playerSpeed;
-
-        }
-
-
-        if (
-            keys.d
-        ) {
-
-            nextX +=
-                playerSpeed;
-
-        }
-
-
-        activeRed.x =
-            nextX;
-
-
-        activeRed.y =
-            nextY;
-
-
-        if (
-            activeRed.isGk
-        ) {
-
-            activeRed.x =
-                Math.max(
-                    25 +
-                        activeRed.radius,
-
-                    Math.min(
-                        100 -
-                            activeRed.radius,
-
-                        activeRed.x
-                    )
-                );
-
-
-            activeRed.y =
-                Math.max(
-                    150 +
-                        activeRed.radius,
-
-                    Math.min(
-                        450 -
-                            activeRed.radius,
-
-                        activeRed.y
-                    )
-                );
-
-        }
-
-        else {
-
-            activeRed.x =
-                Math.max(
-                    25 +
-                        activeRed.radius,
-
-                    Math.min(
-                        875 -
-                            activeRed.radius,
-
-                        activeRed.x
-                    )
-                );
-
-
-            activeRed.y =
-                Math.max(
-                    activeRed.radius,
-
-                    Math.min(
-                        canvas.height -
-                            activeRed.radius,
-
-                        activeRed.y
-                    )
-                );
-
-
-            if (
-                blueGkHasBall
-            ) {
-
-                resolveBoxCollision(
-
-                    activeRed,
-
-                    {
-                        minX: 775,
-
-                        maxX: 875,
-
-                        minY: 150,
-
-                        maxY: 450
+    }
+    
+    if (activeBlue && !activeBlue.ejecting) {
+        let nextX = activeBlue.x, nextY = activeBlue.y;
+        if (gameMode === '1v1') {
+            if (keys.ArrowUp) nextY -= playerSpeed;
+            if (keys.ArrowDown) nextY += playerSpeed;
+            if (keys.ArrowLeft) nextX -= playerSpeed;
+            if (keys.ArrowRight) nextX += playerSpeed;
+        } else {
+            if (aiReactionTimer <= 0 && aiStartDelay <= 0) {
+                let aiSpeed = playerSpeed * ai.speedMultiplier;
+                if (ball.owner === activeBlue) {
+                    aiHoldBallTimer++;
+                    aiDribbleTime += 0.04;
+                    let curveY = Math.sin(aiDribbleTime) * 130;
+                    let targetY = 300 + curveY;
+                    if (activeBlue.x > 160) nextX -= aiSpeed;
+                    if (activeBlue.y < targetY - 15) nextY += aiSpeed;
+                    else if (activeBlue.y > targetY + 15) nextY -= aiSpeed;
+                    arrowAngle = Math.atan2(300 - activeBlue.y, 25 - activeBlue.x);
+                    let isCloseToGoal = activeBlue.x < ai.shootRange;
+                    if (aiPassCooldown <= 0 && activeBlue.x > 380) {
+                        let teammates = players.filter(p => p.team === 'blue' && !p.isGk && p !== activeBlue);
+                        let randomTeammate = teammates[Math.floor(Math.random() * teammates.length)];
+                        let distToHuman = activeRed ? Math.hypot(activeRed.x - activeBlue.x, activeRed.y - activeBlue.y) : 999;
+                        if (randomTeammate && (distToHuman < ai.passTriggerDist || Math.random() < 0.005)) {
+                            let passAngle = Math.atan2(randomTeammate.y - activeBlue.y, randomTeammate.x - activeBlue.x);
+                            if (Math.random() < (1 - ai.perfectPassRate)) passAngle += (Math.random() - 0.5) * ai.passError;
+                            arrowAngle = passAngle;
+                            shootBall(activeBlue);
+                            aiPassCooldown = ai.passCooldown;
+                        }
                     }
-
-                );
-
-            }
-
-        }
-
-    }
-
-
-    // =====================================================
-    // BLUE PLAYER
-    // =====================================================
-
-    if (
-        activeBlue
-    ) {
-
-        let nextX =
-            activeBlue.x;
-
-        let nextY =
-            activeBlue.y;
-
-
-        if (
-            keys.ArrowUp
-        ) {
-
-            nextY -=
-                playerSpeed;
-
-        }
-
-
-        if (
-            keys.ArrowDown
-        ) {
-
-            nextY +=
-                playerSpeed;
-
-        }
-
-
-        if (
-            keys.ArrowLeft
-        ) {
-
-            nextX -=
-                playerSpeed;
-
-        }
-
-
-        if (
-            keys.ArrowRight
-        ) {
-
-            nextX +=
-                playerSpeed;
-
-        }
-
-
-        activeBlue.x =
-            nextX;
-
-
-        activeBlue.y =
-            nextY;
-
-
-        if (
-            activeBlue.isGk
-        ) {
-
-            activeBlue.x =
-                Math.max(
-                    800 +
-                        activeBlue.radius,
-
-                    Math.min(
-                        875 -
-                            activeBlue.radius,
-
-                        activeBlue.x
-                    )
-                );
-
-
-            activeBlue.y =
-                Math.max(
-                    150 +
-                        activeBlue.radius,
-
-                    Math.min(
-                        450 -
-                            activeBlue.radius,
-
-                        activeBlue.y
-                    )
-                );
-
-        }
-
-        else {
-
-            activeBlue.x =
-                Math.max(
-                    25 +
-                        activeBlue.radius,
-
-                    Math.min(
-                        875 -
-                            activeBlue.radius,
-
-                        activeBlue.x
-                    )
-                );
-
-
-            activeBlue.y =
-                Math.max(
-                    activeBlue.radius,
-
-                    Math.min(
-                        canvas.height -
-                            activeBlue.radius,
-
-                        activeBlue.y
-                    )
-                );
-
-
-            if (
-                redGkHasBall
-            ) {
-
-                resolveBoxCollision(
-
-                    activeBlue,
-
-                    {
-                        minX: 25,
-
-                        maxX: 125,
-
-                        minY: 150,
-
-                        maxY: 450
+                    let forcePanicShot = (isCloseToGoal && aiHoldBallTimer > ai.panicTimer);
+                    if ((forcePanicShot || (isCloseToGoal && Math.random() < 0.03)) && ball.owner === activeBlue) {
+                        if (Math.random() < (1 - ai.perfectShotRate)) arrowAngle += Math.random() > 0.5 ? ai.missError : -ai.missError;
+                        shootBall(activeBlue);
+                        aiHoldBallTimer = 0;
+                        aiPassCooldown = 60;
                     }
-
-                );
-
+                } else {
+                    aiHoldBallTimer = 0;
+                    aiStateTimer -= dt * 60;
+                    if (aiStateTimer <= 0) {
+                        aiStateTimer = Math.floor(Math.random() * 50) + 30;
+                        let roll = Math.random();
+                        if (activeRed && activeRed.x > 350 && roll < ai.retreatRate) aiState = 'RETREAT';
+                        else if (roll < (ai.retreatRate + ai.chaseRate)) {
+                            aiState = 'CHASE';
+                            aiTargetOffset = { x: (Math.random() - 0.5) * 60, y: (Math.random() - 0.5) * 60 };
+                        } else aiState = 'HESITATE';
+                        
+                        if (aiState === 'RETREAT') {
+                            aiTargetX = 680 + (Math.random() - 0.5) * 40;
+                            aiTargetY = 300 + (Math.random() - 0.5) * 80;
+                        } else if (aiState === 'CHASE') {
+                            aiTargetX = ball.x + aiTargetOffset.x;
+                            aiTargetY = ball.y + aiTargetOffset.y;
+                        } else {
+                            aiTargetX = activeBlue.x + (Math.random() - 0.5) * 80;
+                            aiTargetY = activeBlue.y + (Math.random() - 0.5) * 80;
+                        }
+                    }
+                    let dx = aiTargetX - activeBlue.x;
+                    let dy = aiTargetY - activeBlue.y;
+                    let distToTarget = Math.hypot(dx, dy);
+                    if (distToTarget > 15) {
+                        let moveSpeed = aiSpeed * (0.8 + Math.random() * 0.4);
+                        if (distToTarget > 100) moveSpeed *= 1.2;
+                        nextX += (dx / distToTarget) * moveSpeed;
+                        nextY += (dy / distToTarget) * moveSpeed;
+                    }
+                }
             }
-
         }
-
+        activeBlue.x = nextX;
+        activeBlue.y = nextY;
+        if (activeBlue.isGk) {
+            activeBlue.x = Math.max(800 + activeBlue.radius, Math.min(875 - activeBlue.radius, activeBlue.x));
+            activeBlue.y = Math.max(150 + activeBlue.radius, Math.min(450 - activeBlue.radius, activeBlue.y));
+        } else {
+            activeBlue.x = Math.max(25 + activeBlue.radius, Math.min(875 - activeBlue.radius, activeBlue.x));
+            activeBlue.y = Math.max(activeBlue.radius, Math.min(canvas.height - activeBlue.radius, activeBlue.y));
+            if (redGkHasBall) {
+                resolveBoxCollision(activeBlue, { minX: 25, maxX: 125, minY: 150, maxY: 450 });
+            }
+        }
     }
-
-
-    // =====================================================
-    // BALL POSSESSION
-    // =====================================================
-
-    if (
-        ball.owner
-    ) {
-
-        ball.x =
-            ball.owner.x;
-
-
-        ball.y =
-            ball.owner.y;
-
-
-        arrowAngle +=
-            0.08;
-
-
-        // RED SHOOT
-
-        if (
-            ball.owner.team ===
-                'red' &&
-            keys.space
-        ) {
-
-            shootBall(
-                ball.owner
-            );
-
-            keys.space =
-                false;
-
+    
+    // ─── BALL PHYSICS ───
+    if (ball.owner) {
+        ball.x = ball.owner.x;
+        ball.y = ball.owner.y;
+        if (ball.owner.isGk) {
+            gkTimer--;
+            let gk = ball.owner;
+            let canPass = gkTimer <= 300;
+            if (!(gameMode === 'pve' && gk.team === 'blue')) {
+                arrowAngle += 0.08;
+            }
+            if (gkTimer <= 0) {
+                if (gameMode === 'pve' && gk.team === 'blue') {
+                    doAiGkPass(gk);
+                } else {
+                    shootBall(gk);
+                }
+            } else if (canPass) {
+                if (gk.team === 'red' && keys.space) {
+                    shootBall(gk);
+                    keys.space = false;
+                } else if (gk.team === 'blue') {
+                    if (gameMode === '1v1' && keys.enter) {
+                        shootBall(gk);
+                        keys.enter = false;
+                    } else if (gameMode === 'pve') {
+                        aiTimer++;
+                        if (aiTimer > 50) {
+                            doAiGkPass(gk);
+                            aiTimer = 0;
+                        }
+                    }
+                }
+            }
+        } else {
+            if (!(gameMode === 'pve' && ball.owner.team === 'blue')) {
+                arrowAngle += 0.08;
+            }
+            if (ball.owner.team === 'red' && keys.space) {
+                shootBall(ball.owner);
+                keys.space = false;
+            } else if (ball.owner.team === 'blue' && gameMode === '1v1' && keys.enter) {
+                shootBall(ball.owner);
+                keys.enter = false;
+            }
         }
-
-
-        // BLUE SHOOT
-
-        else if (
-            ball.owner.team ===
-                'blue' &&
-            keys.enter
-        ) {
-
-            shootBall(
-                ball.owner
-            );
-
-            keys.enter =
-                false;
-
-        }
-
-    }
-
-
-    // =====================================================
-    // FREE BALL
-    // =====================================================
-
-    else {
-
-        ball.x +=
-            ball.vx;
-
-        ball.y +=
-            ball.vy;
-
-
-        ball.vx *=
-            0.985;
-
-        ball.vy *=
-            0.985;
-
-
-        // BALL TRAIL
-
-        if (
-            Math.hypot(
-                ball.vx,
-                ball.vy
-            ) > 6 &&
-            Math.random() <
-                0.4
-        ) {
-
+    } else {
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+        ball.vx *= 0.985;
+        ball.vy *= 0.985;
+        
+        if (Math.hypot(ball.vx, ball.vy) > 6 && Math.random() < 0.4) {
             particles.push({
-
-                x: ball.x,
-
-                y: ball.y,
-
-                vx:
-                    (Math.random() -
-                        0.5) *
-                    2,
-
-                vy:
-                    (Math.random() -
-                        0.5) *
-                    2,
-
-                size:
-                    Math.random() *
-                    4 +
-                    2,
-
-                color:
-                    'rgba(255,255,255,0.5)',
-
-                rotation: 0,
-
-                vRot: 0,
-
-                life: 15
-
+                x: ball.x, y: ball.y,
+                vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2,
+                size: Math.random() * 4 + 2, color: 'rgba(255,255,255,0.5)',
+                rotation: 0, vRot: 0, life: 15
             });
-
         }
-
-
-        // =================================================
-        // POST COLLISION
-        // =================================================
-
-        for (
-            let post of posts
-        ) {
-
-            let dist =
-                Math.hypot(
-
-                    ball.x -
-                        post.x,
-
-                    ball.y -
-                        post.y
-
-                );
-
-
-            if (
-                dist <
-                ball.radius +
-                    post.radius
-            ) {
-
-                let angle =
-                    Math.atan2(
-
-                        ball.y -
-                            post.y,
-
-                        ball.x -
-                            post.x
-
-                    );
-
-
-                let speed =
-                    Math.hypot(
-
-                        ball.vx,
-
-                        ball.vy
-
-                    );
-
-
-                if (
-                    speed < 4
-                ) {
-
-                    speed = 4;
-
-                }
-
-
-                ball.vx =
-                    Math.cos(
-                        angle
-                    ) *
-                    speed;
-
-
-                ball.vy =
-                    Math.sin(
-                        angle
-                    ) *
-                    speed;
-
-
-                let overlap =
-                    (
-                        ball.radius +
-                        post.radius
-                    ) -
-                    dist +
-                    1;
-
-
-                ball.x +=
-                    Math.cos(
-                        angle
-                    ) *
-                    overlap;
-
-
-                ball.y +=
-                    Math.sin(
-                        angle
-                    ) *
-                    overlap;
-
+        
+        for (let post of posts) {
+            let dist = Math.hypot(ball.x - post.x, ball.y - post.y);
+            if (dist < ball.radius + post.radius) {
+                let angle = Math.atan2(ball.y - post.y, ball.x - post.x);
+                let speed = Math.max(4, Math.hypot(ball.vx, ball.vy));
+                ball.vx = Math.cos(angle) * speed;
+                ball.vy = Math.sin(angle) * speed;
+                let overlap = (ball.radius + post.radius) - dist + 1;
+                ball.x += Math.cos(angle) * overlap;
+                ball.y += Math.sin(angle) * overlap;
+                // Post hit sound
+                SoundManager.playSFX('kick', 0.3);
             }
-
         }
-
-
-        // =================================================
-        // PITCH BOUNDARIES
-        // =================================================
-
-        if (
-            ball.y <=
-            ball.radius
-        ) {
-
-            ball.y =
-                ball.radius;
-
-            ball.vy *=
-                -1;
-
-        }
-
-        else if (
-            ball.y >=
-            canvas.height -
-                ball.radius
-        ) {
-
-            ball.y =
-                canvas.height -
-                ball.radius;
-
-            ball.vy *=
-                -1;
-
-        }
-
-
-        // =================================================
-        // LEFT GOAL
-        // =================================================
-
-        if (
-            ball.x -
-                ball.radius <=
-            25
-        ) {
-
-            if (
-                ball.y >= 200 &&
-                ball.y <= 400
-            ) {
-
-                if (
-                    ball.y -
-                        ball.radius <=
-                    200
-                ) {
-
-                    ball.y =
-                        200 +
-                        ball.radius;
-
-                    ball.vy *=
-                        -1;
-
-                }
-
-                else if (
-                    ball.y +
-                        ball.radius >=
-                    400
-                ) {
-
-                    ball.y =
-                        400 -
-                        ball.radius;
-
-                    ball.vy *=
-                        -1;
-
-                }
-
-
-                if (
-                    ball.x -
-                        ball.radius <=
-                    5
-                ) {
-
+        
+        if (ball.y <= ball.radius) { ball.y = ball.radius; ball.vy *= -1; }
+        else if (ball.y >= canvas.height - ball.radius) { ball.y = canvas.height - ball.radius; ball.vy *= -1; }
+        
+        if (ball.x - ball.radius <= 25) {
+            if (ball.y >= 200 && ball.y <= 400) {
+                if (ball.y - ball.radius <= 200) { ball.y = 200 + ball.radius; ball.vy *= -1; }
+                else if (ball.y + ball.radius >= 400) { ball.y = 400 - ball.radius; ball.vy *= -1; }
+                if (ball.x - ball.radius <= 5) {
                     score.blue++;
-
-                    triggerGoal(
-
-                        'BLUE TEAM SCORES!',
-
-                        'red'
-
-                    );
-
+                    triggerGoal('BLUE TEAM SCORES!', 'red', 25, ball.y);
+                    currentState = 'GOAL_SCORED';
+                    goalBannerTimer = 0;
                     return;
-
                 }
-
-            }
-
-            else {
-
-                ball.x =
-                    25 +
-                    ball.radius;
-
-                ball.vx *=
-                    -1;
-
-            }
-
+            } else { ball.x = 25 + ball.radius; ball.vx *= -1; }
         }
-
-
-        // =================================================
-        // RIGHT GOAL
-        // =================================================
-
-        if (
-            ball.x +
-                ball.radius >=
-            875
-        ) {
-
-            if (
-                ball.y >= 200 &&
-                ball.y <= 400
-            ) {
-
-                if (
-                    ball.y -
-                        ball.radius <=
-                    200
-                ) {
-
-                    ball.y =
-                        200 +
-                        ball.radius;
-
-                    ball.vy *=
-                        -1;
-
-                }
-
-                else if (
-                    ball.y +
-                        ball.radius >=
-                    400
-                ) {
-
-                    ball.y =
-                        400 -
-                        ball.radius;
-
-                    ball.vy *=
-                        -1;
-
-                }
-
-
-                if (
-                    ball.x +
-                        ball.radius >=
-                    895
-                ) {
-
+        
+        if (ball.x + ball.radius >= 875) {
+            if (ball.y >= 200 && ball.y <= 400) {
+                if (ball.y - ball.radius <= 200) { ball.y = 200 + ball.radius; ball.vy *= -1; }
+                else if (ball.y + ball.radius >= 400) { ball.y = 400 - ball.radius; ball.vy *= -1; }
+                if (ball.x + ball.radius >= 895) {
                     score.red++;
-
-                    triggerGoal(
-
-                        'RED TEAM SCORES!',
-
-                        'blue'
-
-                    );
-
+                    triggerGoal('RED TEAM SCORES!', 'blue', 875, ball.y);
+                    currentState = 'GOAL_SCORED';
+                    goalBannerTimer = 0;
                     return;
-
                 }
-
-            }
-
-            else {
-
-                ball.x =
-                    875 -
-                    ball.radius;
-
-                ball.vx *=
-                    -1;
-
-            }
-
+            } else { ball.x = 875 - ball.radius; ball.vx *= -1; }
         }
-
-
-        // =================================================
-        // CATCH BALL
-        // =================================================
-
-        for (
-            let p of players
-        ) {
-
-            if (
-                ball.cooldownPlayer ===
-                p
-            ) {
-
-                continue;
-
-            }
-
-
-            let dist =
-                Math.hypot(
-
-                    p.x -
-                        ball.x,
-
-                    p.y -
-                        ball.y
-
-                );
-
-
-            if (
-                dist <
-                p.radius +
-                    ball.radius
-            ) {
-
-                ball.owner =
-                    p;
-
-
+        
+        for (let p of players) {
+            if (p.ejecting || ball.cooldownPlayer === p) continue;
+            let dist = Math.hypot(p.x - ball.x, p.y - ball.y);
+            if (dist < p.radius + ball.radius) {
+                // Set flag to prevent kick sound on GK steal
+                window._gkStealInProgress = p.isGk && ball.cooldownPlayer && ball.cooldownPlayer.team !== p.team;
+                
+                ball.owner = p;
                 ball.vx = 0;
-
                 ball.vy = 0;
-
-                arrowAngle = 0;
-
+                if (p.isGk) {
+                    gkTimer = 360;
+                    if (ball.cooldownPlayer && ball.cooldownPlayer.team !== p.team) {
+                        let shooter = ball.cooldownPlayer;
+                        let target = null;
+                        if (p.team === 'blue' && shooter.x > 775 && shooter.y > 150 && shooter.y < 450) {
+                            target = getEjectTarget(shooter, { minX: 775, maxX: 875, minY: 150, maxY: 450 });
+                        } else if (p.team === 'red' && shooter.x < 125 && shooter.y > 150 && shooter.y < 450) {
+                            target = getEjectTarget(shooter, { minX: 25, maxX: 125, minY: 150, maxY: 450 });
+                        }
+                        if (target) {
+                            shooter.ejecting = true;
+                            shooter.ejectTargetX = target.x;
+                            shooter.ejectTargetY = target.y;
+                        }
+                    }
+                }
+                if (!(gameMode === 'pve' && p.team === 'blue')) {
+                    arrowAngle = 0;
+                }
+                // Reset flag after a frame
+                setTimeout(() => { window._gkStealInProgress = false; }, 50);
                 break;
-
             }
-
         }
-
     }
-
-
-    // =====================================================
-    // TACKLING
-    // =====================================================
-
-    if (
-        ball.owner &&
-        !ball.owner.isGk
-    ) {
-
-        let defender =
-
-            ball.owner.team ===
-            'red'
-
-                ? activeBlue
-
-                : activeRed;
-
-
-        if (
-            defender
-        ) {
-
-            let dist =
-                Math.hypot(
-
-                    ball.owner.x -
-                        defender.x,
-
-                    ball.owner.y -
-                        defender.y
-
-                );
-
-
-            if (
-                dist <
-                ball.owner.radius +
-                    defender.radius +
-                    2
-            ) {
-
-                let tackler =
-                    ball.owner;
-
-
-                ball.owner =
-                    null;
-
-
-                let tackleAngle =
-
-                    Math.atan2(
-
-                        defender.y -
-                            ball.y,
-
-                        defender.x -
-                            ball.x
-
-                    ) +
-                    Math.PI;
-
-
-                ball.vx =
-
-                    Math.cos(
-                        tackleAngle
-                    ) *
-                    9;
-
-
-                ball.vy =
-
-                    Math.sin(
-                        tackleAngle
-                    ) *
-                    9;
-
-
-                ball.cooldownPlayer =
-                    tackler;
-
-
-                ball.cooldownTimer =
-                    15;
-
+    
+    if (ball.owner && !ball.owner.isGk) {
+        let gkClaimed = false;
+        let opponentGk = players.find(p => p.isGk && p.team !== ball.owner.team);
+        if (opponentGk) {
+            let dist = Math.hypot(ball.owner.x - opponentGk.x, ball.owner.y - opponentGk.y);
+            if (dist < ball.owner.radius + opponentGk.radius + 2) {
+                // GK steal - set flag to prevent kick sound
+                window._gkStealInProgress = true;
+                
+                let offender = ball.owner;
+                ball.owner = opponentGk;
+                gkTimer = 360;
+                let target = null;
+                if (opponentGk.team === 'blue') {
+                    target = getEjectTarget(offender, { minX: 775, maxX: 875, minY: 150, maxY: 450 });
+                } else {
+                    target = getEjectTarget(offender, { minX: 25, maxX: 125, minY: 150, maxY: 450 });
+                }
+                offender.ejecting = true;
+                offender.ejectTargetX = target.x;
+                offender.ejectTargetY = target.y;
+                gkClaimed = true;
+                
+                setTimeout(() => { window._gkStealInProgress = false; }, 50);
             }
-
         }
-
+        if (!gkClaimed) {
+            let defender = ball.owner.team === 'red' ? activeBlue : activeRed;
+            if (defender && !defender.ejecting) {
+                let dist = Math.hypot(ball.owner.x - defender.x, ball.owner.y - defender.y);
+                if (dist < ball.owner.radius + defender.radius + 2) {
+                    let tackler = ball.owner;
+                    ball.owner = null;
+                    let tackleAngle = Math.atan2(defender.y - ball.y, defender.x - ball.x) + Math.PI;
+                    ball.vx = Math.cos(tackleAngle) * 9;
+                    ball.vy = Math.sin(tackleAngle) * 9;
+                    ball.cooldownPlayer = tackler;
+                    ball.cooldownTimer = 15;
+                    aiReactionTimer = 20;
+                    
+                    // Play kick sound for tackle
+                    SoundManager.playSFX('kick', 0.6);
+                }
+            }
+        }
     }
-
 }
 
-
-// =========================================================
-// DRAW PITCH
-// =========================================================
+// ─── DRAW FUNCTIONS ───
 
 function drawPitch() {
-
-    const stripeWidth =
-        (875 - 25) /
-        10;
-
-
-    for (
-        let i = 0;
-        i < 10;
-        i++
-    ) {
-
-        ctx.fillStyle =
-            i % 2 === 0
-                ? '#27ae60'
-                : '#2ecc71';
-
-
-        ctx.fillRect(
-
-            25 +
-                i *
-                stripeWidth,
-
-            0,
-
-            stripeWidth,
-
-            canvas.height
-
-        );
-
+    const stripeWidth = (875 - 25) / 10;
+    for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#27ae60' : '#2ecc71';
+        ctx.fillRect(25 + i * stripeWidth, 0, stripeWidth, canvas.height);
     }
-
-
-    // FIELD BORDER
-
-    ctx.strokeStyle =
-        '#ffffff';
-
-    ctx.lineWidth = 3;
-
-    ctx.strokeRect(
-
-        25,
-
-        0,
-
-        850,
-
-        canvas.height
-
-    );
-
-
-    // MIDFIELD
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        450,
-        0
-    );
-
-    ctx.lineTo(
-        450,
-        600
-    );
-
-    ctx.stroke();
-
-
-    // CENTER CIRCLE
-
-    ctx.beginPath();
-
-    ctx.arc(
-
-        450,
-
-        300,
-
-        70,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-    ctx.stroke();
-
-
-    // CENTER SPOT
-
-    ctx.beginPath();
-
-    ctx.arc(
-
-        450,
-
-        300,
-
-        4,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-    ctx.fillStyle =
-        '#ffffff';
-
-    ctx.fill();
-
-
-    // PENALTY BOXES
-
-    ctx.strokeRect(
-
-        25,
-
-        150,
-
-        100,
-
-        300
-
-    );
-
-
-    ctx.strokeRect(
-
-        775,
-
-        150,
-
-        100,
-
-        300
-
-    );
-
-
-    // PENALTY SPOTS
-
-    ctx.beginPath();
-
-    ctx.arc(
-
-        95,
-
-        300,
-
-        3,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-    ctx.fill();
-
-
-    ctx.beginPath();
-
-    ctx.arc(
-
-        805,
-
-        300,
-
-        3,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-    ctx.fill();
-
-
-    // GOAL NET EFFECT
-
-    ctx.strokeStyle =
-        'rgba(255,255,255,0.35)';
-
-    ctx.lineWidth = 1;
-
-
-    for (
-        let y = 200;
-        y <= 400;
-        y += 15
-    ) {
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            0,
-            y
-        );
-
-        ctx.lineTo(
-            25,
-            y
-        );
-
-        ctx.stroke();
-
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            875,
-            y
-        );
-
-        ctx.lineTo(
-            900,
-            y
-        );
-
-        ctx.stroke();
-
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+    ctx.strokeRect(25, 0, 850, canvas.height);
+    ctx.beginPath(); ctx.moveTo(450, 0); ctx.lineTo(450, 600); ctx.stroke();
+    ctx.beginPath(); ctx.arc(450, 300, 70, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(450, 300, 4, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.beginPath(); ctx.arc(25, 0, 20, 0, Math.PI * 0.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(25, 600, 20, Math.PI * 1.5, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(875, 0, 20, Math.PI * 0.5, Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(875, 600, 20, Math.PI, Math.PI * 1.5); ctx.stroke();
+    ctx.strokeRect(25, 150, 100, 300);
+    ctx.strokeRect(775, 150, 100, 300);
+    ctx.beginPath(); ctx.arc(95, 300, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(805, 300, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
+    for (let y = 200; y <= 400; y += 15) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(25, y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(875, y); ctx.lineTo(900, y); ctx.stroke();
     }
-
-
-    for (
-        let x = 0;
-        x <= 25;
-        x += 8
-    ) {
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            x,
-            200
-        );
-
-        ctx.lineTo(
-            x,
-            400
-        );
-
-        ctx.stroke();
-
-    }
-
-
-    for (
-        let x = 875;
-        x <= 900;
-        x += 8
-    ) {
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            x,
-            200
-        );
-
-        ctx.lineTo(
-            x,
-            400
-        );
-
-        ctx.stroke();
-
-    }
-
 }
 
-
-// =========================================================
-// ACTIVE PLAYER INDICATOR
-// =========================================================
-
-function drawActiveIndicator(
-
-    p,
-
-    labelText,
-
-    colorHex
-
-) {
-
-    let time =
-        Date.now() *
-        0.007;
-
-
-    let pulseRadius =
-
-        p.radius +
-        7 +
-        Math.sin(time) *
-        3;
-
-
+function drawActiveIndicator(p, labelText, colorHex) {
+    let time = Date.now() * 0.007;
+    let pulseRadius = p.radius + 7 + Math.sin(time) * 3;
     ctx.save();
-
-
     ctx.beginPath();
-
-    ctx.arc(
-
-        p.x,
-
-        p.y,
-
-        pulseRadius,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-
-    ctx.strokeStyle =
-        colorHex;
-
+    ctx.arc(p.x, p.y, pulseRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = colorHex;
     ctx.lineWidth = 3.5;
-
-    ctx.shadowColor =
-        colorHex;
-
+    ctx.shadowColor = colorHex;
     ctx.shadowBlur = 10;
-
-    ctx.setLineDash(
-        [8, 4]
-    );
-
+    ctx.setLineDash([8, 4]);
     ctx.stroke();
-
-
     ctx.restore();
-
-
     ctx.save();
-
-
-    ctx.fillStyle =
-        colorHex;
-
-    ctx.shadowColor =
-        colorHex;
-
+    ctx.fillStyle = colorHex;
+    ctx.shadowColor = colorHex;
     ctx.shadowBlur = 8;
-
-
     ctx.beginPath();
-
-    ctx.moveTo(
-
-        p.x - 7,
-
-        p.y -
-            p.radius -
-            20
-
-    );
-
-
-    ctx.lineTo(
-
-        p.x + 7,
-
-        p.y -
-            p.radius -
-            20
-
-    );
-
-
-    ctx.lineTo(
-
-        p.x,
-
-        p.y -
-            p.radius -
-            10
-
-    );
-
-
+    ctx.moveTo(p.x - 7, p.y - p.radius - 20);
+    ctx.lineTo(p.x + 7, p.y - p.radius - 20);
+    ctx.lineTo(p.x, p.y - p.radius - 10);
     ctx.closePath();
-
     ctx.fill();
-
-
-    ctx.font =
-        '900 13px Arial';
-
-
-    ctx.textAlign =
-        'center';
-
-
-    ctx.fillText(
-
-        labelText,
-
-        p.x,
-
-        p.y -
-            p.radius -
-            24
-
-    );
-
-
+    ctx.font = '900 13px Outfit, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(labelText, p.x, p.y - p.radius - 24);
     ctx.restore();
-
 }
-
-
-// =========================================================
-// SCOREBOARD
-// =========================================================
 
 function drawScoreboard() {
-
-    ctx.fillStyle =
-        'rgba(15,20,25,0.75)';
-
-
-    ctx.beginPath();
-
-
-    ctx.roundRect(
-
-        300,
-
-        15,
-
-        300,
-
-        50,
-
-        25
-
-    );
-
-
-    ctx.fill();
-
-
-    ctx.strokeStyle =
-        'rgba(255,255,255,0.15)';
-
-
-    ctx.lineWidth = 1.5;
-
-    ctx.stroke();
-
-
-    // RED SCORE
-
-    ctx.fillStyle =
-        '#ff5252';
-
-
-    ctx.font =
-        '900 28px Arial';
-
-
-    ctx.textAlign =
-        'right';
-
-
-    ctx.fillText(
-
-        score.red,
-
-        410,
-
-        51
-
-    );
-
-
-    ctx.font =
-        '800 14px Arial';
-
-
-    ctx.fillStyle =
-        '#e74c3c';
-
-
-    ctx.fillText(
-
-        'RED',
-
-        365,
-
-        48
-
-    );
-
-
-    // VS
-
-    ctx.fillStyle =
-        'rgba(255,255,255,0.4)';
-
-
-    ctx.font =
-        '700 14px Arial';
-
-
-    ctx.textAlign =
-        'center';
-
-
-    ctx.fillText(
-
-        'VS',
-
-        450,
-
-        48
-
-    );
-
-
-    // BLUE
-
-    ctx.font =
-        '800 14px Arial';
-
-
-    ctx.fillStyle =
-        '#3498db';
-
-
-    ctx.textAlign =
-        'left';
-
-
-    ctx.fillText(
-
-        'BLUE',
-
-        505,
-
-        48
-
-    );
-
-
-    ctx.fillStyle =
-        '#48dbfb';
-
-
-    ctx.font =
-        '900 28px Arial';
-
-
-    ctx.fillText(
-
-        score.blue,
-
-        475,
-
-        51
-
-    );
-
-}
-
-
-// =========================================================
-// DRAW MENU
-// =========================================================
-
-function drawMenu() {
-
-    ctx.fillStyle =
-        '#111827';
-
-    ctx.fillRect(
-
-        0,
-
-        0,
-
-        canvas.width,
-
-        canvas.height
-
-    );
-
-
-    let grad1 =
-
-        ctx.createRadialGradient(
-
-            250,
-
-            200,
-
-            10,
-
-            250,
-
-            200,
-
-            300
-
-        );
-
-
-    grad1.addColorStop(
-
-        0,
-
-        'rgba(231,76,60,0.25)'
-
-    );
-
-
-    grad1.addColorStop(
-
-        1,
-
-        'transparent'
-
-    );
-
-
-    ctx.fillStyle =
-        grad1;
-
-
-    ctx.fillRect(
-
-        0,
-
-        0,
-
-        900,
-
-        600
-
-    );
-
-
-    let grad2 =
-
-        ctx.createRadialGradient(
-
-            650,
-
-            400,
-
-            10,
-
-            650,
-
-            400,
-
-            300
-
-        );
-
-
-    grad2.addColorStop(
-
-        0,
-
-        'rgba(52,152,219,0.25)'
-
-    );
-
-
-    grad2.addColorStop(
-
-        1,
-
-        'transparent'
-
-    );
-
-
-    ctx.fillStyle =
-        grad2;
-
-
-    ctx.fillRect(
-
-        0,
-
-        0,
-
-        900,
-
-        600
-
-    );
-
-
-    ctx.fillStyle =
-        '#ffffff';
-
-
-    ctx.textAlign =
-        'center';
-
-
-    ctx.font =
-        '900 52px Arial';
-
-
-    ctx.fillText(
-
-        'PRO STRIKER',
-
-        450,
-
-        170
-
-    );
-
-
-    ctx.font =
-        '700 20px Arial';
-
-
-    ctx.fillStyle =
-        '#f1c40f';
-
-
-    ctx.fillText(
-
-        `★ FIRST TO ${maxScore} GOALS WINS ★`,
-
-        450,
-
-        215
-
-    );
-
-
-    let options = [
-
-        {
-            key: '[ 1 ]',
-
-            label:
-                'START MATCH',
-
-            y: 290,
-
-            color:
-                '#2ecc71'
-
-        },
-
-        {
-            key: '[ 2 ]',
-
-            label:
-                'INSTRUCTIONS',
-
-            y: 360,
-
-            color:
-                '#3498db'
-
-        },
-
-        {
-            key: '[ 3 ]',
-
-            label:
-                'SETTINGS',
-
-            y: 430,
-
-            color:
-                '#e74c3c'
-
-        }
-
-    ];
-
-
-    for (
-        let opt of options
-    ) {
-
-        ctx.fillStyle =
-            'rgba(255,255,255,0.07)';
-
-
-        ctx.beginPath();
-
-
-        ctx.roundRect(
-
-            280,
-
-            opt.y - 32,
-
-            340,
-
-            50,
-
-            12
-
-        );
-
-
-        ctx.fill();
-
-
-        ctx.strokeStyle =
-            'rgba(255,255,255,0.15)';
-
-
-        ctx.stroke();
-
-
-        ctx.font =
-            '800 20px Arial';
-
-
-        ctx.fillStyle =
-            opt.color;
-
-
-        ctx.textAlign =
-            'left';
-
-
-        ctx.fillText(
-
-            opt.key,
-
-            310,
-
-            opt.y + 2
-
-        );
-
-
-        ctx.fillStyle =
-            '#ffffff';
-
-
-        ctx.fillText(
-
-            opt.label,
-
-            385,
-
-            opt.y + 2
-
-        );
-
+    ctx.fillStyle = 'rgba(15,20,25,0.75)';
+    ctx.beginPath(); ctx.roundRect(300, 15, 300, 50, 25); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#ff5252'; ctx.font = '900 28px Outfit, sans-serif';
+    ctx.textAlign = 'right'; ctx.fillText(score.red, 410, 51);
+    ctx.font = '800 14px Outfit, sans-serif'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('RED', 365, 48);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '700 14px Outfit, sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('VS', 450, 48);
+    ctx.font = '800 14px Outfit, sans-serif'; ctx.fillStyle = '#3498db';
+    ctx.textAlign = 'left'; ctx.fillText(gameMode === 'pve' ? 'COM' : 'BLUE', 505, 48);
+    ctx.fillStyle = '#48dbfb'; ctx.font = '900 28px Outfit, sans-serif';
+    ctx.fillText(score.blue, 475, 51);
+    
+    if (gameMode === 'pve') {
+        ctx.fillStyle = 'rgba(15,20,25,0.85)';
+        ctx.beginPath(); ctx.roundRect(15, 15, 80, 28, 12); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5; ctx.stroke();
+        let diffColor = difficulty === 'EASY' ? '#2ecc71' : (difficulty === 'MEDIUM' ? '#f1c40f' : '#e74c3c');
+        ctx.fillStyle = diffColor;
+        ctx.font = '700 14px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(difficulty, 55, 35);
     }
-
+    
+    ctx.fillStyle = 'rgba(15,20,25,0.85)';
+    ctx.beginPath(); ctx.roundRect(400, 68, 100, 32, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5; ctx.stroke();
+    let minutes = Math.floor(matchClock / 60);
+    let seconds = Math.floor(matchClock % 60);
+    let timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    ctx.fillStyle = matchClock <= 5 ? '#ff5252' : '#f1c40f';
+    ctx.font = '800 20px Outfit, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(timeStr, 450, 94);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '600 10px Outfit, sans-serif';
+    ctx.fillText(currentHalf === 1 ? '1ST HALF' : '2ND HALF', 450, 78);
 }
 
+function drawGkTimerUI() {
+    if (gkTimer > 0 && ball.owner && ball.owner.isGk) {
+        let seconds = Math.ceil(gkTimer / 60);
+        ctx.fillStyle = 'rgba(15,20,25,0.85)';
+        ctx.beginPath();
+        ctx.roundRect(canvas.width - 80, 15, 65, 50, 10);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = seconds <= 2 ? '#ff5252' : '#f1c40f';
+        ctx.font = '900 24px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(seconds + 's', canvas.width - 47, 43);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 10px Outfit, sans-serif';
+        ctx.fillText('GK TIME', canvas.width - 47, 25);
+    }
+}
 
-// =========================================================
-// DRAW INSTRUCTIONS
-// =========================================================
+function drawMenuBackground() {
+    ctx.fillStyle = '#0b0f19';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let time = Date.now() * 0.0012;
+    let rad1X = 250 + Math.sin(time) * 60;
+    let rad1Y = 200 + Math.cos(time * 0.8) * 40;
+    let grad1 = ctx.createRadialGradient(rad1X, rad1Y, 10, rad1X, rad1Y, 340);
+    grad1.addColorStop(0, 'rgba(231,76,60,0.35)');
+    grad1.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad1; ctx.fillRect(0, 0, 900, 600);
+    let rad2X = 650 + Math.cos(time * 0.9) * 60;
+    let rad2Y = 400 + Math.sin(time) * 40;
+    let grad2 = ctx.createRadialGradient(rad2X, rad2Y, 10, rad2X, rad2Y, 340);
+    grad2.addColorStop(0, 'rgba(52,152,219,0.35)');
+    grad2.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad2; ctx.fillRect(0, 0, 900, 600);
+    ctx.fillStyle = '#ffffff';
+    for (let p of menuBgParticles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = 900; if (p.x > 900) p.x = 0;
+        if (p.y < 0) p.y = 600; if (p.y > 600) p.y = 0;
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
 
-function drawInstructions() {
-
-    ctx.fillStyle =
-        '#111827';
-
-    ctx.fillRect(
-
-        0,
-
-        0,
-
-        canvas.width,
-
-        canvas.height
-
-    );
-
-
-    ctx.fillStyle =
-        '#ffffff';
-
-    ctx.textAlign =
-        'center';
-
-
-    ctx.font =
-        '900 36px Arial';
-
-
-    ctx.fillText(
-
-        'HOW TO PLAY',
-
-        450,
-
-        80
-
-    );
-
-
-    ctx.fillStyle =
-        'rgba(255,255,255,0.05)';
-
-
+function drawDifficultySelect() {
+    drawMenuBackground();
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '900 48px Outfit, sans-serif';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 20;
+    ctx.fillText('SELECT DIFFICULTY', 450, 150);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '600 16px Outfit, sans-serif';
+    ctx.fillText('Choose your challenge level', 450, 190);
+    
+    // Easy
+    ctx.fillStyle = 'rgba(46, 204, 113, 0.15)';
     ctx.beginPath();
-
-
-    ctx.roundRect(
-
-        100,
-
-        120,
-
-        700,
-
-        360,
-
-        16
-
-    );
-
-
+    ctx.roundRect(180, 250, 150, 90, 16);
     ctx.fill();
-
-
-    ctx.font =
-        '600 17px Arial';
-
-
-    ctx.fillStyle =
-        '#f1c40f';
-
-
-    ctx.fillText(
-
-        `MATCH RULE: First team to reach ${maxScore} goals wins the game!`,
-
-        450,
-
-        160
-
-    );
-
-
-    ctx.fillStyle =
-        '#ffffff';
-
-
-    ctx.fillText(
-
-        '• You automatically control whichever player is nearest to the ball.',
-
-        450,
-
-        200
-
-    );
-
-
-    ctx.fillText(
-
-        '• RED TEAM: Use [ W, A, S, D ] to Move  |  Press [ SPACE ] to Pass / Shoot',
-
-        450,
-
-        240
-
-    );
-
-
-    ctx.fillText(
-
-        '• BLUE TEAM: Use [ ARROW KEYS ] to Move  |  Press [ ENTER ] to Pass / Shoot',
-
-        450,
-
-        280
-
-    );
-
-
-    ctx.fillText(
-
-        '• Aim your shots using the spinning 360° yellow direction arrow.',
-
-        450,
-
-        320
-
-    );
-
-
-    ctx.fillText(
-
-        '• Goalkeepers are protected: Opponents cannot enter box or tackle GK.',
-
-        450,
-
-        360
-
-    );
-
-
-    ctx.fillText(
-
-        '• Shots bouncing off the metal posts will ricochet back into play.',
-
-        450,
-
-        400
-
-    );
-
-
-    ctx.font =
-        '700 16px Arial';
-
-
-    ctx.fillStyle =
-        '#95a5a6';
-
-
-    ctx.fillText(
-
-        'Press [ ESC ] or [ BACKSPACE ] to return to main menu',
-
-        450,
-
-        520
-
-    );
-
-}
-
-
-// =========================================================
-// DRAW SETTINGS
-// =========================================================
-
-function drawSettings() {
-
-    ctx.fillStyle =
-        '#111827';
-
-    ctx.fillRect(
-
-        0,
-
-        0,
-
-        canvas.width,
-
-        canvas.height
-
-    );
-
-
-    ctx.fillStyle =
-        '#ffffff';
-
-    ctx.textAlign =
-        'center';
-
-
-    ctx.font =
-        '900 36px Arial';
-
-
-    ctx.fillText(
-
-        'MATCH SETTINGS',
-
-        450,
-
-        160
-
-    );
-
-
-    ctx.fillStyle =
-        'rgba(255,255,255,0.05)';
-
-
+    ctx.strokeStyle = difficulty === 'EASY' ? '#2ecc71' : 'rgba(46, 204, 113, 0.5)';
+    ctx.lineWidth = difficulty === 'EASY' ? 3 : 2;
+    ctx.stroke();
+    ctx.fillStyle = '#2ecc71';
+    ctx.font = '700 24px Outfit, sans-serif';
+    ctx.shadowColor = difficulty === 'EASY' ? '#2ecc71' : 'transparent';
+    ctx.shadowBlur = difficulty === 'EASY' ? 20 : 0;
+    ctx.fillText('EASY', 255, 295);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '600 12px Outfit, sans-serif';
+    ctx.fillText('Casual Play', 255, 320);
+    
+    // Medium
+    ctx.fillStyle = 'rgba(241, 196, 15, 0.15)';
     ctx.beginPath();
-
-
-    ctx.roundRect(
-
-        200,
-
-        220,
-
-        500,
-
-        200,
-
-        16
-
-    );
-
-
+    ctx.roundRect(370, 250, 150, 90, 16);
     ctx.fill();
-
-
-    ctx.font =
-        '800 24px Arial';
-
-
-    ctx.fillStyle =
-        '#f1c40f';
-
-
-    ctx.fillText(
-
-        `Target Goal Limit: ${maxScore} Goals`,
-
-        450,
-
-        290
-
-    );
-
-
-    ctx.font =
-        '600 18px Arial';
-
-
-    ctx.fillStyle =
-        '#ffffff';
-
-
-    ctx.fillText(
-
-        'Use [ UP ] and [ DOWN ] Arrow Keys to modify goal limit',
-
-        450,
-
-        340
-
-    );
-
-
-    ctx.font =
-        '700 16px Arial';
-
-
-    ctx.fillStyle =
-        '#95a5a6';
-
-
-    ctx.fillText(
-
-        'Press [ ESC ] or [ BACKSPACE ] to return to main menu',
-
-        450,
-
-        480
-
-    );
-
+    ctx.strokeStyle = difficulty === 'MEDIUM' ? '#f1c40f' : 'rgba(241, 196, 15, 0.5)';
+    ctx.lineWidth = difficulty === 'MEDIUM' ? 3 : 2;
+    ctx.stroke();
+    ctx.fillStyle = '#f1c40f';
+    ctx.font = '700 24px Outfit, sans-serif';
+    ctx.shadowColor = difficulty === 'MEDIUM' ? '#f1c40f' : 'transparent';
+    ctx.shadowBlur = difficulty === 'MEDIUM' ? 20 : 0;
+    ctx.fillText('MEDIUM', 445, 295);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '600 12px Outfit, sans-serif';
+    ctx.fillText('Balanced Challenge', 445, 320);
+    
+    // Hard
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.beginPath();
+    ctx.roundRect(560, 250, 150, 90, 16);
+    ctx.fill();
+    ctx.strokeStyle = difficulty === 'HARD' ? '#e74c3c' : 'rgba(231, 76, 60, 0.5)';
+    ctx.lineWidth = difficulty === 'HARD' ? 3 : 2;
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '700 24px Outfit, sans-serif';
+    ctx.shadowColor = difficulty === 'HARD' ? '#e74c3c' : 'transparent';
+    ctx.shadowBlur = difficulty === 'HARD' ? 20 : 0;
+    ctx.fillText('HARD', 635, 290);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '600 12px Outfit, sans-serif';
+    ctx.fillText('Expert Challenge', 635, 320);
+    
+    // Back button
+    ctx.fillStyle = 'rgba(155, 89, 182, 0.2)';
+    ctx.beginPath();
+    ctx.roundRect(350, 400, 200, 45, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#9b59b6';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#9b59b6';
+    ctx.font = '700 18px Outfit, sans-serif';
+    ctx.shadowBlur = 0;
+    ctx.fillText('← BACK', 450, 430);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = '600 13px Outfit, sans-serif';
+    ctx.fillText('Press [E] [M] [H] or tap to select', 450, 480);
+    ctx.restore();
 }
 
+function drawPauseButton() {
+    const x = 860, y = 15, w = 30, h = 30;
+    ctx.save();
+    ctx.fillStyle = pauseButton.hover ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 8, y + 7, 4, 16);
+    ctx.fillRect(x + 18, y + 7, 4, 16);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '7px Outfit, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSE', x + w/2, y + h + 12);
+    ctx.restore();
+}
 
-// =========================================================
-// DRAW GAME
-// =========================================================
+function drawPauseMenu() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(250, 150, 400, 320, 20);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f1c40f';
+    ctx.font = '900 40px Outfit, sans-serif';
+    ctx.shadowColor = '#f39c12';
+    ctx.shadowBlur = 20;
+    ctx.fillText('⏸ PAUSED', 450, 210);
+    ctx.shadowBlur = 0;
+    
+    // Resume button
+    ctx.fillStyle = 'rgba(46, 204, 113, 0.15)';
+    ctx.beginPath();
+    ctx.roundRect(350, 235, 200, 50, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#2ecc71';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#2ecc71';
+    ctx.font = '700 22px Outfit, sans-serif';
+    ctx.fillText('▶ RESUME', 450, 270);
+    
+    // Main Menu button
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.beginPath();
+    ctx.roundRect(350, 295, 200, 50, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '700 22px Outfit, sans-serif';
+    ctx.fillText('🏠 MAIN MENU', 450, 330);
+    
+    // Sound controls
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '600 14px Outfit, sans-serif';
+    ctx.fillText('SOUND CONTROLS', 450, 370);
+    
+    // Music toggle
+    ctx.fillStyle = SoundManager.musicEnabled ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
+    ctx.beginPath();
+    ctx.roundRect(330, 385, 110, 35, 10);
+    ctx.fill();
+    ctx.strokeStyle = SoundManager.musicEnabled ? '#2ecc71' : '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = SoundManager.musicEnabled ? '#2ecc71' : '#e74c3c';
+    ctx.font = '700 16px Outfit, sans-serif';
+    ctx.fillText(`🎵 ${SoundManager.musicEnabled ? 'ON' : 'OFF'}`, 385, 410);
+    
+    // SFX toggle
+    ctx.fillStyle = SoundManager.sfxEnabled ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
+    ctx.beginPath();
+    ctx.roundRect(460, 385, 110, 35, 10);
+    ctx.fill();
+    ctx.strokeStyle = SoundManager.sfxEnabled ? '#2ecc71' : '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = SoundManager.sfxEnabled ? '#2ecc71' : '#e74c3c';
+    ctx.font = '700 16px Outfit, sans-serif';
+    ctx.fillText(`🔊 ${SoundManager.sfxEnabled ? 'ON' : 'OFF'}`, 515, 410);
+    
+    // Labels
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '500 10px Outfit, sans-serif';
+    ctx.fillText('Music', 385, 427);
+    ctx.fillText('SFX', 515, 427);
+    
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '600 13px Outfit, sans-serif';
+    ctx.fillText('Press [ ESC ] or [ P ] to resume', 450, 445);
+    ctx.restore();
+}
 
 function draw() {
-
-    ctx.clearRect(
-
-        0,
-
-        0,
-
-        canvas.width,
-
-        canvas.height
-
-    );
-
-
-    // MENU
-
-    if (
-        currentState ===
-        'MENU'
-    ) {
-
-        drawMenu();
-
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(screenShake.x, screenShake.y);
+    
+    if (currentState === 'MENU') {
+        drawMenuBackground();
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 25;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 58px Outfit, sans-serif';
+        ctx.fillText('PRO STRIKER', 450, 150);
+        ctx.restore();
+        
+        let options = [
+            { key: '[ 1 ]', label: '1 VS 1 MATCH', y: 280, color: '#2ecc71' },
+            { key: '[ 2 ]', label: 'VS COMPUTER', y: 350, color: '#00d2d3' },
+            { key: '[ 3 ]', label: 'INSTRUCTIONS', y: 420, color: '#ff9f43' },
+            { key: '[ 4 ]', label: 'SETTINGS', y: 490, color: '#ee5253' }
+        ];
+        for (let opt of options) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+            ctx.beginPath();
+            ctx.roundRect(280, opt.y - 32, 340, 50, 14);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.font = '900 18px Outfit, sans-serif';
+            ctx.fillStyle = opt.color;
+            ctx.shadowColor = opt.color;
+            ctx.shadowBlur = 10;
+            ctx.textAlign = 'left';
+            ctx.fillText(opt.key, 305, opt.y + 1);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(opt.label, 375, opt.y + 1);
+            ctx.restore();
+        }
+        
+        // Sound indicator
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.font = '600 12px Outfit, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`🎵${SoundManager.musicEnabled ? 'ON' : 'OFF'}  🔊${SoundManager.sfxEnabled ? 'ON' : 'OFF'}   [M:SFX] [N:Music]`, 870, 580);
+        ctx.restore();
+        
+        ctx.restore();
         return;
-
     }
-
-
-    // INSTRUCTIONS
-
-    if (
-        currentState ===
-        'INSTRUCTIONS'
-    ) {
-
-        drawInstructions();
-
+    
+    if (currentState === 'DIFFICULTY_SELECT') {
+        drawDifficultySelect();
         return;
-
     }
-
-
-    // SETTINGS
-
-    if (
-        currentState ===
-        'SETTINGS'
-    ) {
-
-        drawSettings();
-
+    
+    if (currentState === 'INSTRUCTIONS' || currentState === 'SETTINGS') {
+        drawMenuBackground();
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center';
+        if (currentState === 'INSTRUCTIONS') {
+            ctx.font = '900 36px Outfit, sans-serif'; ctx.fillText('HOW TO PLAY', 450, 80);
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            ctx.beginPath(); ctx.roundRect(100, 120, 700, 360, 16); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.stroke();
+            ctx.font = '600 17px Outfit, sans-serif';
+            ctx.fillStyle = '#f1c40f';
+            ctx.fillText(`MATCH RULE: Two ${halfDuration}s halves -- most goals wins!`, 450, 160);
+            ctx.fillStyle = '#ffffff';
+            if (isMobileDevice) {
+                ctx.fillText('• RED TEAM: Bottom-Left Joystick | Shoot Button ⚽', 450, 220);
+                ctx.fillText('• BLUE TEAM: Top-Right Joystick | Shoot Button ⚽', 450, 260);
+            } else {
+                ctx.fillText('• RED TEAM: [ W, A, S, D ] | [ SPACE ] to Shoot', 450, 220);
+                ctx.fillText('• BLUE TEAM: [ ARROW KEYS ] | [ ENTER ] to Shoot', 450, 260);
+            }
+            ctx.fillText('• Goalkeepers have 6 Seconds to pass before auto-kicking.', 450, 310);
+            ctx.fillText('• Touching an opponent GK gets you immediately ejected.', 450, 350);
+            ctx.fillText('• Shots blocked by the GK push the shooter back.', 450, 390);
+            ctx.fillStyle = '#f1c40f';
+            ctx.fillText(`• Press [ P ] or tap pause button to pause the game`, 450, 430);
+        } else {
+            // SETTINGS screen with sound controls
+            ctx.font = '900 36px Outfit, sans-serif'; ctx.fillText('SETTINGS', 450, 80);
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            ctx.beginPath(); ctx.roundRect(200, 120, 500, 380, 16); ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.stroke();
+            
+            // Half Duration
+            ctx.font = '800 22px Outfit, sans-serif'; ctx.fillStyle = '#f1c40f';
+            ctx.fillText(`Half Duration: ${halfDuration} seconds`, 450, 180);
+            ctx.font = '600 16px Outfit, sans-serif'; ctx.fillStyle = '#ffffff';
+            ctx.fillText('Use [ UP ] and [ DOWN ] Arrow Keys or Tap to modify', 450, 215);
+            ctx.fillStyle = '#95a5a6';
+            ctx.font = '600 13px Outfit, sans-serif';
+            ctx.fillText('Range: 15 -- 120 seconds (5s steps)', 450, 240);
+            
+            // Sound Controls
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.font = '600 16px Outfit, sans-serif';
+            ctx.fillText('SOUND CONTROLS', 450, 290);
+            
+            // Music toggle
+            const musicBtn = { x: 350, y: 305, w: 200, h: 40 };
+            ctx.fillStyle = SoundManager.musicEnabled ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
+            ctx.beginPath();
+            ctx.roundRect(musicBtn.x, musicBtn.y, musicBtn.w, musicBtn.h, 10);
+            ctx.fill();
+            ctx.strokeStyle = SoundManager.musicEnabled ? '#2ecc71' : '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = SoundManager.musicEnabled ? '#2ecc71' : '#e74c3c';
+            ctx.font = '700 18px Outfit, sans-serif';
+            ctx.fillText(`🎵 Music: ${SoundManager.musicEnabled ? 'ON' : 'OFF'}`, 450, 335);
+            
+            // SFX toggle
+            const sfxBtn = { x: 350, y: 360, w: 200, h: 40 };
+            ctx.fillStyle = SoundManager.sfxEnabled ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
+            ctx.beginPath();
+            ctx.roundRect(sfxBtn.x, sfxBtn.y, sfxBtn.w, sfxBtn.h, 10);
+            ctx.fill();
+            ctx.strokeStyle = SoundManager.sfxEnabled ? '#2ecc71' : '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = SoundManager.sfxEnabled ? '#2ecc71' : '#e74c3c';
+            ctx.font = '700 18px Outfit, sans-serif';
+            ctx.fillText(`🔊 SFX: ${SoundManager.sfxEnabled ? 'ON' : 'OFF'}`, 450, 390);
+            
+            // Shortcut reminder
+            ctx.fillStyle = '#95a5a6';
+            ctx.font = '600 12px Outfit, sans-serif';
+            ctx.fillText('Press [M] to toggle SFX, [N] to toggle Music', 450, 440);
+        }
+        ctx.font = '700 16px Outfit, sans-serif'; ctx.fillStyle = '#95a5a6';
+        ctx.fillText(isMobileDevice ? 'Tap screen to return to menu' : 'Press [ ESC ] or [ BACKSPACE ] to return to menu', 450, 520);
+        ctx.restore();
         return;
-
     }
-
-
-    // =====================================================
-    // PITCH
-    // =====================================================
-
+    
+    if (currentState === 'PAUSED') {
+        drawPitch();
+        for (let p of players) {
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y + p.radius * 0.8, p.radius * 0.9, p.radius * 0.45, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        let activeRed = getActivePlayer('red');
+        let activeBlue = getActivePlayer('blue');
+        if (activeRed && !activeRed.ejecting) drawActiveIndicator(activeRed, 'P1', '#f39c12');
+        if (activeBlue && !activeBlue.ejecting) {
+            drawActiveIndicator(activeBlue, gameMode === '1v1' ? 'P2' : 'COM', gameMode === '1v1' ? '#00ffff' : '#9b59b6');
+        }
+        for (let p of players) {
+            let pGrad = ctx.createRadialGradient(p.x - 4, p.y - 4, 2, p.x, p.y, p.radius);
+            pGrad.addColorStop(0, p.color); pGrad.addColorStop(1, p.gradColor);
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fillStyle = pGrad; ctx.fill();
+            ctx.lineWidth = p.isGk ? 3 : 2; ctx.strokeStyle = p.isGk ? '#f1c40f' : '#ffffff'; ctx.stroke();
+            drawStar(p.x, p.y, 5, 8, 3.5);
+        }
+        for (let post of posts) {
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.beginPath(); ctx.ellipse(post.x, post.y + 4, post.radius, post.radius * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+            let postGrad = ctx.createRadialGradient(post.x - 2, post.y - 2, 1, post.x, post.y, post.radius);
+            postGrad.addColorStop(0, '#ffffff'); postGrad.addColorStop(1, '#bdc3c7');
+            ctx.beginPath(); ctx.arc(post.x, post.y, post.radius, 0, Math.PI * 2);
+            ctx.fillStyle = postGrad; ctx.fill();
+            ctx.lineWidth = 1.5; ctx.strokeStyle = '#2c3e50'; ctx.stroke();
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.ellipse(ball.x, ball.y + ball.radius * 0.7, ball.radius * 0.9, ball.radius * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#1e272e'; ctx.stroke();
+        ctx.fillStyle = '#1e272e'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 3, 0, Math.PI * 2); ctx.fill();
+        if (ball.owner) {
+            ctx.save();
+            let startX = ball.owner.x + Math.cos(arrowAngle) * 22;
+            let startY = ball.owner.y + Math.sin(arrowAngle) * 22;
+            let endX = ball.owner.x + Math.cos(arrowAngle) * 65;
+            let endY = ball.owner.y + Math.sin(arrowAngle) * 65;
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY);
+            ctx.lineWidth = 4; ctx.strokeStyle = '#f1c40f'; ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 8; ctx.stroke();
+            let tipAngle1 = arrowAngle + Math.PI * 0.85; let tipAngle2 = arrowAngle - Math.PI * 0.85;
+            ctx.beginPath();
+            ctx.moveTo(endX, endY); ctx.lineTo(endX + Math.cos(tipAngle1) * 11, endY + Math.sin(tipAngle1) * 11);
+            ctx.moveTo(endX, endY); ctx.lineTo(endX + Math.cos(tipAngle2) * 11, endY + Math.sin(tipAngle2) * 11);
+            ctx.stroke(); ctx.restore();
+        }
+        for (let p of particles) {
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation);
+            ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); ctx.restore();
+        }
+        drawScoreboard();
+        drawGkTimerUI();
+        drawPauseMenu();
+        ctx.restore();
+        return;
+    }
+    
+    // ─── PLAY STATE ───
     drawPitch();
-
-
-    // =====================================================
-    // PLAYER SHADOWS
-    // =====================================================
-
-    for (
-        let p of players
-    ) {
-
-        ctx.fillStyle =
-            'rgba(0,0,0,0.3)';
-
-
+    for (let p of players) {
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
         ctx.beginPath();
-
-
-        ctx.ellipse(
-
-            p.x,
-
-            p.y +
-                p.radius *
-                0.8,
-
-            p.radius *
-                0.9,
-
-            p.radius *
-                0.45,
-
-            0,
-
-            0,
-
-            Math.PI * 2
-
-        );
-
-
+        ctx.ellipse(p.x, p.y + p.radius * 0.8, p.radius * 0.9, p.radius * 0.45, 0, 0, Math.PI * 2);
         ctx.fill();
-
     }
-
-
-    // =====================================================
-    // ACTIVE INDICATORS
-    // =====================================================
-
-    let activeRed =
-        getActivePlayer(
-            'red'
-        );
-
-
-    let activeBlue =
-        getActivePlayer(
-            'blue'
-        );
-
-
-    if (
-        activeRed
-    ) {
-
-        drawActiveIndicator(
-
-            activeRed,
-
-            'P1',
-
-            '#f39c12'
-
-        );
-
+    let activeRed = getActivePlayer('red');
+    let activeBlue = getActivePlayer('blue');
+    if (activeRed && !activeRed.ejecting) drawActiveIndicator(activeRed, 'P1', '#f39c12');
+    if (activeBlue && !activeBlue.ejecting) {
+        drawActiveIndicator(activeBlue, gameMode === '1v1' ? 'P2' : 'COM', gameMode === '1v1' ? '#00ffff' : '#9b59b6');
     }
-
-
-    if (
-        activeBlue
-    ) {
-
-        drawActiveIndicator(
-
-            activeBlue,
-
-            'P2',
-
-            '#00ffff'
-
-        );
-
+    for (let p of players) {
+        let pGrad = ctx.createRadialGradient(p.x - 4, p.y - 4, 2, p.x, p.y, p.radius);
+        pGrad.addColorStop(0, p.color); pGrad.addColorStop(1, p.gradColor);
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = pGrad; ctx.fill();
+        ctx.lineWidth = p.isGk ? 3 : 2; ctx.strokeStyle = p.isGk ? '#f1c40f' : '#ffffff'; ctx.stroke();
+        drawStar(p.x, p.y, 5, 8, 3.5);
     }
-
-
-    // =====================================================
-    // PLAYERS
-    // =====================================================
-
-    for (
-        let p of players
-    ) {
-
-        let pGrad =
-
-            ctx.createRadialGradient(
-
-                p.x - 4,
-
-                p.y - 4,
-
-                2,
-
-                p.x,
-
-                p.y,
-
-                p.radius
-
-            );
-
-
-        pGrad.addColorStop(
-
-            0,
-
-            p.color
-
-        );
-
-
-        pGrad.addColorStop(
-
-            1,
-
-            p.gradColor
-
-        );
-
-
-        ctx.beginPath();
-
-
-        ctx.arc(
-
-            p.x,
-
-            p.y,
-
-            p.radius,
-
-            0,
-
-            Math.PI * 2
-
-        );
-
-
-        ctx.fillStyle =
-            pGrad;
-
-
-        ctx.fill();
-
-
-        ctx.lineWidth =
-            p.isGk
-                ? 3
-                : 2;
-
-
-        ctx.strokeStyle =
-
-            p.isGk
-                ? '#f1c40f'
-                : '#ffffff';
-
-
-        ctx.stroke();
-
-
-        drawStar(
-
-            p.x,
-
-            p.y,
-
-            5,
-
-            8,
-
-            3.5
-
-        );
-
+    for (let post of posts) {
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath(); ctx.ellipse(post.x, post.y + 4, post.radius, post.radius * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+        let postGrad = ctx.createRadialGradient(post.x - 2, post.y - 2, 1, post.x, post.y, post.radius);
+        postGrad.addColorStop(0, '#ffffff'); postGrad.addColorStop(1, '#bdc3c7');
+        ctx.beginPath(); ctx.arc(post.x, post.y, post.radius, 0, Math.PI * 2);
+        ctx.fillStyle = postGrad; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#2c3e50'; ctx.stroke();
     }
-
-
-    // =====================================================
-    // GOAL POSTS
-    // =====================================================
-
-    for (
-        let post of posts
-    ) {
-
-        ctx.fillStyle =
-            'rgba(0,0,0,0.4)';
-
-
-        ctx.beginPath();
-
-
-        ctx.ellipse(
-
-            post.x,
-
-            post.y + 4,
-
-            post.radius,
-
-            post.radius *
-                0.5,
-
-            0,
-
-            0,
-
-            Math.PI * 2
-
-        );
-
-
-        ctx.fill();
-
-
-        let postGrad =
-
-            ctx.createRadialGradient(
-
-                post.x - 2,
-
-                post.y - 2,
-
-                1,
-
-                post.x,
-
-                post.y,
-
-                post.radius
-
-            );
-
-
-        postGrad.addColorStop(
-
-            0,
-
-            '#ffffff'
-
-        );
-
-
-        postGrad.addColorStop(
-
-            1,
-
-            '#bdc3c7'
-
-        );
-
-
-        ctx.beginPath();
-
-
-        ctx.arc(
-
-            post.x,
-
-            post.y,
-
-            post.radius,
-
-            0,
-
-            Math.PI * 2
-
-        );
-
-
-        ctx.fillStyle =
-            postGrad;
-
-
-        ctx.fill();
-
-
-        ctx.lineWidth =
-            1.5;
-
-
-        ctx.strokeStyle =
-            '#2c3e50';
-
-
-        ctx.stroke();
-
-    }
-
-
-    // =====================================================
-    // BALL SHADOW
-    // =====================================================
-
-    ctx.fillStyle =
-        'rgba(0,0,0,0.35)';
-
-
-    ctx.beginPath();
-
-
-    ctx.ellipse(
-
-        ball.x,
-
-        ball.y +
-            ball.radius *
-            0.7,
-
-        ball.radius *
-            0.9,
-
-        ball.radius *
-            0.4,
-
-        0,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-
-    ctx.fill();
-
-
-    // =====================================================
-    // BALL
-    // =====================================================
-
-    ctx.beginPath();
-
-
-    ctx.arc(
-
-        ball.x,
-
-        ball.y,
-
-        ball.radius,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-
-    ctx.fillStyle =
-        '#ffffff';
-
-
-    ctx.fill();
-
-
-    ctx.lineWidth =
-        1.5;
-
-
-    ctx.strokeStyle =
-        '#1e272e';
-
-
-    ctx.stroke();
-
-
-    ctx.fillStyle =
-        '#1e272e';
-
-
-    ctx.beginPath();
-
-
-    ctx.arc(
-
-        ball.x,
-
-        ball.y,
-
-        3,
-
-        0,
-
-        Math.PI * 2
-
-    );
-
-
-    ctx.fill();
-
-
-    // =====================================================
-    // AIMING ARROW
-    // =====================================================
-
-    if (
-        ball.owner
-    ) {
-
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(ball.x, ball.y + ball.radius * 0.7, ball.radius * 0.9, ball.radius * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#1e272e'; ctx.stroke();
+    ctx.fillStyle = '#1e272e'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 3, 0, Math.PI * 2); ctx.fill();
+    if (ball.owner) {
         ctx.save();
-
-
-        let startX =
-
-            ball.owner.x +
-
-            Math.cos(
-                arrowAngle
-            ) *
-            22;
-
-
-        let startY =
-
-            ball.owner.y +
-
-            Math.sin(
-                arrowAngle
-            ) *
-            22;
-
-
-        let endX =
-
-            ball.owner.x +
-
-            Math.cos(
-                arrowAngle
-            ) *
-            65;
-
-
-        let endY =
-
-            ball.owner.y +
-
-            Math.sin(
-                arrowAngle
-            ) *
-            65;
-
-
+        let startX = ball.owner.x + Math.cos(arrowAngle) * 22;
+        let startY = ball.owner.y + Math.sin(arrowAngle) * 22;
+        let endX = ball.owner.x + Math.cos(arrowAngle) * 65;
+        let endY = ball.owner.y + Math.sin(arrowAngle) * 65;
+        ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY);
+        ctx.lineWidth = 4; ctx.strokeStyle = '#f1c40f'; ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 8; ctx.stroke();
+        let tipAngle1 = arrowAngle + Math.PI * 0.85; let tipAngle2 = arrowAngle - Math.PI * 0.85;
         ctx.beginPath();
-
-
-        ctx.moveTo(
-
-            startX,
-
-            startY
-
-        );
-
-
-        ctx.lineTo(
-
-            endX,
-
-            endY
-
-        );
-
-
-        ctx.lineWidth = 4;
-
-
-        ctx.strokeStyle =
-            '#f1c40f';
-
-
-        ctx.shadowColor =
-            '#f1c40f';
-
-
-        ctx.shadowBlur = 8;
-
-
-        ctx.stroke();
-
-
-        let tipAngle1 =
-
-            arrowAngle +
-            Math.PI *
-            0.85;
-
-
-        let tipAngle2 =
-
-            arrowAngle -
-            Math.PI *
-            0.85;
-
-
-        ctx.beginPath();
-
-
-        ctx.moveTo(
-
-            endX,
-
-            endY
-
-        );
-
-
-        ctx.lineTo(
-
-            endX +
-                Math.cos(
-                    tipAngle1
-                ) *
-                11,
-
-            endY +
-                Math.sin(
-                    tipAngle1
-                ) *
-                11
-
-        );
-
-
-        ctx.moveTo(
-
-            endX,
-
-            endY
-
-        );
-
-
-        ctx.lineTo(
-
-            endX +
-                Math.cos(
-                    tipAngle2
-                ) *
-                11,
-
-            endY +
-                Math.sin(
-                    tipAngle2
-                ) *
-                11
-
-        );
-
-
-        ctx.stroke();
-
-
-        ctx.restore();
-
+        ctx.moveTo(endX, endY); ctx.lineTo(endX + Math.cos(tipAngle1) * 11, endY + Math.sin(tipAngle1) * 11);
+        ctx.moveTo(endX, endY); ctx.lineTo(endX + Math.cos(tipAngle2) * 11, endY + Math.sin(tipAngle2) * 11);
+        ctx.stroke(); ctx.restore();
     }
-
-
-    // =====================================================
-    // PARTICLES
-    // =====================================================
-
-    for (
-        let p of particles
-    ) {
-
-        ctx.save();
-
-
-        ctx.translate(
-
-            p.x,
-
-            p.y
-
-        );
-
-
-        ctx.rotate(
-
-            p.rotation
-
-        );
-
-
-        ctx.fillStyle =
-            p.color;
-
-
-        ctx.fillRect(
-
-            -p.size / 2,
-
-            -p.size / 2,
-
-            p.size,
-
-            p.size
-
-        );
-
-
-        ctx.restore();
-
+    for (let p of particles) {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation);
+        ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); ctx.restore();
     }
-
-
-    // SCOREBOARD
-
     drawScoreboard();
-
-
-    // =====================================================
-    // GOAL BANNER
-    // =====================================================
-
-    if (
-        currentState ===
-        'GOAL_SCORED'
-    ) {
-
-        ctx.fillStyle =
-            'rgba(15,23,42,0.85)';
-
-
-        ctx.fillRect(
-
-            0,
-
-            220,
-
-            900,
-
-            160
-
-        );
-
-
-        ctx.fillStyle =
-            '#f1c40f';
-
-
-        ctx.font =
-            '900 64px Arial';
-
-
-        ctx.textAlign =
-            'center';
-
-
-        ctx.shadowColor =
-            '#f39c12';
-
-
-        ctx.shadowBlur =
-            15;
-
-
-        ctx.fillText(
-
-            'GOAL!',
-
-            450,
-
-            290
-
-        );
-
-
+    drawGkTimerUI();
+    if (currentState === 'PLAY') {
+        drawPauseButton();
+    }
+    if (matchState === 'HALFTIME') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(15,23,42,0.85)'; ctx.fillRect(0, 250, 900, 100);
+        ctx.fillStyle = '#f1c40f'; ctx.font = '900 48px Outfit, sans-serif';
+        ctx.textAlign = 'center'; ctx.shadowColor = '#f39c12'; ctx.shadowBlur = 20;
+        ctx.fillText('HALF TIME', 450, 310);
+        ctx.restore();
+    }
+    if (kickoffDelay > 0 && currentState === 'PLAY' && matchState === 'PLAY') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(15,23,42,0.7)';
+        ctx.fillRect(0, 250, 900, 60);
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = '800 36px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('KICKOFF', 450, 295);
+        ctx.restore();
+    }
+    if (currentState === 'GOAL_SCORED') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(15,23,42,0.88)';
+        ctx.fillRect(0, 210, 900, 180);
+        ctx.translate(450, 280);
+        ctx.scale(goalZoomScale, goalZoomScale);
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = '900 68px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#f39c12';
+        ctx.shadowBlur = 25;
+        ctx.fillText('GOAL!', 0, 0);
         ctx.shadowBlur = 0;
-
-
-        ctx.fillStyle =
-            '#ffffff';
-
-
-        ctx.font =
-            '800 24px Arial';
-
-
-        ctx.fillText(
-
-            lastScorer,
-
-            450,
-
-            340
-
-        );
-
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '800 22px Outfit, sans-serif';
+        ctx.fillText(lastScorer, 0, 48);
+        ctx.restore();
     }
-
+    if (currentState === 'MATCH_END') {
+        ctx.save();
+        ctx.fillStyle = 'rgba(15,23,42,0.88)';
+        ctx.fillRect(0, 200, 900, 200);
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = '900 56px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#f39c12'; ctx.shadowBlur = 20;
+        ctx.fillText(lastScorer, 450, 270);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 26px Outfit, sans-serif';
+        ctx.fillText(`RED ${score.red} - ${score.blue} BLUE`, 450, 330);
+        ctx.fillStyle = '#95a5a6';
+        ctx.font = '600 18px Outfit, sans-serif';
+        ctx.fillText('Press any key or tap to continue', 450, 380);
+        ctx.restore();
+    }
+    ctx.restore();
 }
 
-
-// =========================================================
-// MOBILE / TABLET TOUCH CONTROLS
-// =========================================================
-
-const ctrlButtons =
-
-    document.querySelectorAll(
-        '.ctrl-btn'
-    );
-
-
-function pressVirtualKey(
-    key
-) {
-
-    setKeyState(
-        key,
-        true
-    );
-
-}
-
-
-function releaseVirtualKey(
-    key
-) {
-
-    setKeyState(
-        key,
-        false
-    );
-
-}
-
-
-ctrlButtons.forEach(
-
-    function (btn) {
-
-        const key =
-
-            btn.getAttribute(
-                'data-key'
-            );
-
-
-        // POINTER DOWN
-
-        btn.addEventListener(
-
-            'pointerdown',
-
-            function (e) {
-
-                e.preventDefault();
-
-
-                btn.classList.add(
-                    'pressed'
-                );
-
-
-                pressVirtualKey(
-                    key
-                );
-
-
-                // Keep pointer captured
-
-                try {
-
-                    btn.setPointerCapture(
-                        e.pointerId
-                    );
-
-                }
-
-                catch (error) {}
-
-            }
-
-        );
-
-
-        // POINTER UP
-
-        btn.addEventListener(
-
-            'pointerup',
-
-            function (e) {
-
-                e.preventDefault();
-
-
-                btn.classList.remove(
-                    'pressed'
-                );
-
-
-                releaseVirtualKey(
-                    key
-                );
-
-            }
-
-        );
-
-
-        // POINTER CANCEL
-
-        btn.addEventListener(
-
-            'pointercancel',
-
-            function () {
-
-                btn.classList.remove(
-                    'pressed'
-                );
-
-
-                releaseVirtualKey(
-                    key
-                );
-
-            }
-
-        );
-
-
-        // POINTER LEAVES
-
-        btn.addEventListener(
-
-            'pointerleave',
-
-            function () {
-
-                if (
-                    btn.hasPointerCapture
-                ) {
-
-                    return;
-
-                }
-
-
-                btn.classList.remove(
-                    'pressed'
-                );
-
-
-                releaseVirtualKey(
-                    key
-                );
-
-            }
-
-        );
-
-    }
-
-);
-
-
-// =========================================================
-// MENU TOUCH / MOUSE SUPPORT
-// =========================================================
-
-canvas.addEventListener(
-
-    'pointerdown',
-
-    function (e) {
-
-        if (
-            currentState !==
-            'MENU'
-        ) {
-
-            return;
-
-        }
-
-
-        const rect =
-            canvas.getBoundingClientRect();
-
-
-        const scaleX =
-            canvas.width /
-            rect.width;
-
-
-        const scaleY =
-            canvas.height /
-            rect.height;
-
-
-        const x =
-
-            (
-                e.clientX -
-                rect.left
-            ) *
-            scaleX;
-
-
-        const y =
-
-            (
-                e.clientY -
-                rect.top
-            ) *
-            scaleY;
-
-
-        // START MATCH
-
-        if (
-            x >= 280 &&
-            x <= 620 &&
-            y >= 258 &&
-            y <= 308
-        ) {
-
-            initGame();
-
-            currentState =
-                'PLAY';
-
-        }
-
-
-        // INSTRUCTIONS
-
-        else if (
-            x >= 280 &&
-            x <= 620 &&
-            y >= 328 &&
-            y <= 378
-        ) {
-
-            currentState =
-                'INSTRUCTIONS';
-
-        }
-
-
-        // SETTINGS
-
-        else if (
-            x >= 280 &&
-            x <= 620 &&
-            y >= 398 &&
-            y <= 448
-        ) {
-
-            currentState =
-                'SETTINGS';
-
-        }
-
-    }
-
-);
-
-
-// =========================================================
-// START GAME
-// =========================================================
-
-initGame();
-
-
-// =========================================================
-// GAME LOOP
-// =========================================================
-
-function gameLoop() {
-
-    update();
-
+// ─── GAME LOOP ───
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+    let dt = (timestamp - lastTime) / 1000;
+    if (dt > 0.1) dt = 0.1;
+    lastTime = timestamp;
+    update(dt);
     draw();
-
-    requestAnimationFrame(
-        gameLoop
-    );
-
+    requestAnimationFrame(gameLoop);
 }
 
+// ─── ENGINE INITIALIZATION ───
+initMatch();
+updateTouchUI();
+gameLoop(performance.now());
 
-gameLoop();
+console.log('🎵 SOUND SYSTEM READY!');
+console.log('🎮 Controls:');
+console.log('  [M] Toggle SFX');
+console.log('  [N] Toggle Music');
+console.log('  [P] Pause/Resume');
+console.log('📁 Sound files loaded from /sounds/ folder');
+console.log('🎵 Sounds mapped:');
+console.log('  - Game music (menu)');
+console.log('  - Crowd sound (match) ← NOW CORRECTLY MAPPED');
+console.log('  - Kick sound (shooting/tackling)');
+console.log('  - Goal sounds (cheer + net)');
+console.log('  - Whistle start (kickoff)');
+console.log('  - Whistle stop (half-time/end)');
+console.log('  - Victory music (win)');
+console.log('  - Defeat music (loss)');
