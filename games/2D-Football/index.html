@@ -1,33 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pro Striker - 1v1 & VS Computer</title>
-    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Pro Striker – 1v1 & VS Computer</title>
+    <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="game-wrapper" id="gameWrapper">
-        <!-- Goal Impact Flash Overlay -->
-        <div id="goalFlash" class="goal-flash-overlay"></div>
-
+    <div class="game-wrapper">
         <canvas id="gameCanvas" width="900" height="600"></canvas>
-        
-        <!-- Mobile Touch Controls Overlay (Hidden on PC) -->
-        <div id="touchControls" class="touch-controls mode-pve">
-            <!-- Player 1 Controls -->
+
+        <!-- Mobile Touch Controls -->
+        <div id="touchControls" class="touch-controls mode-1v1">
             <div id="p1Joystick" class="joystick-base p1-joy">
                 <div class="joystick-stick"></div>
             </div>
             <button id="p1Shoot" class="shoot-btn p1-shoot" aria-label="Shoot P1">⚽</button>
-
-            <!-- Player 2 Controls (Active in 1v1 Mode on Mobile) -->
             <div id="p2Joystick" class="joystick-base p2-joy">
                 <div class="joystick-stick"></div>
             </div>
             <button id="p2Shoot" class="shoot-btn p2-shoot" aria-label="Shoot P2">⚽</button>
         </div>
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
