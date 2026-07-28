@@ -1,17 +1,24 @@
 // ============================================================
 //  PRO STRIKER – ULTIMATE EDITION
-//  Sound System · Smart Decisive AI · Two Halves · Pause Menu
-//  Combined from both versions
+//  Sound System · Smart AI · Two Halves · Pause Menu
+//  WORKING VERSION – All controls, UI, and gameplay intact
 // ============================================================
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const gameWrapperElem = document.getElementById('gameWrapper');
 const goalFlashElem = document.getElementById('goalFlash');
+const touchControlsElem = document.getElementById('touchControls');
+
 const W = 900,
     H = 600;
 canvas.width = W;
 canvas.height = H;
+
+// ============================================================
+//  MOBILE DETECTION
+// ============================================================
+const isMobileDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
 // ============================================================
 //  SOUND SYSTEM
@@ -52,7 +59,7 @@ const SoundManager = {
                 }
                 this.sounds[name] = audio;
             } catch (e) {
-                console.warn(`⚠️ Could not load ${name}:`, e);
+                console.warn('⚠️ Could not load ' + name + ':', e);
             }
         }
 
@@ -98,7 +105,7 @@ const SoundManager = {
         try {
             const clone = sound.cloneNode();
             clone.volume = volume;
-            clone.play().catch(e => console.warn('SFX play blocked:', e));
+            clone.play().catch(e => {});
         } catch (e) {
             if (sound.paused) {
                 sound.volume = volume;
@@ -125,7 +132,7 @@ const SoundManager = {
     resumeCrowd() {
         if (this.musicEnabled && this.sounds.crowd && !this.crowdPlaying) {
             this.sounds.crowd.volume = 0.35;
-            this.sounds.crowd.play().catch(e => console.warn('Crowd resume blocked:', e));
+            this.sounds.crowd.play().catch(e => {});
             this.crowdPlaying = true;
             this.currentMusic = this.sounds.crowd;
             this.isMusicPlaying = true;
@@ -193,6 +200,7 @@ let currentState = 'MENU';
 let gameMode = '1v1';
 let difficulty = 'EASY';
 let score = { red: 0, blue: 0 };
+let maxScore = 5;
 let halfDuration = 45;
 let matchClock = halfDuration;
 let currentHalf = 1;
@@ -207,6 +215,8 @@ let lastScorer = '';
 let particles = [];
 let screenShake = { duration: 0, intensity: 0, x: 0, y: 0 };
 let goalZoomScale = 1.0;
+let matchEnded = false;
+let matchActive = true;
 
 // ============================================================
 //  BALL
@@ -296,35 +306,6 @@ for (let i = 0; i < 40; i++) {
         vy: (Math.random() - 0.5) * 0.8,
         alpha: Math.random() * 0.5 + 0.2,
     });
-}
-
-let pageParticles = [];
-function initPageParticles() {
-    pageParticles = [];
-    for (let i = 0; i < 40; i++) {
-        pageParticles.push({
-            x: Math.random() * W,
-            y: Math.random() * H,
-            vx: (Math.random() - 0.5) * 0.3,
-            vy: (Math.random() - 0.5) * 0.3 - 0.1,
-            size: Math.random() * 2 + 1,
-            alpha: Math.random() * 0.3 + 0.05,
-        });
-    }
-}
-initPageParticles();
-
-function updatePageParticles() {
-    for (let p of pageParticles) {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.y < 0) { p.y = H;
-            p.x = Math.random() * W; }
-        if (p.y > H) { p.y = 0;
-            p.x = Math.random() * W; }
-        if (p.x < 0) p.x = W;
-        if (p.x > W) p.x = 0;
-    }
 }
 
 // ============================================================
@@ -510,6 +491,16 @@ function selectMode(mode) {
     initMatch();
     currentState = 'PLAY';
     SoundManager.updateMusicForState(currentState);
+    updateTouchUI();
+}
+
+function updateTouchUI() {
+    if (currentState === 'PLAY' && isMobileDevice) {
+        touchControlsElem.style.display = 'block';
+        touchControlsElem.className = 'touch-controls is-active mode-' + gameMode;
+    } else {
+        touchControlsElem.style.display = 'none';
+    }
 }
 
 // ============================================================
@@ -563,7 +554,7 @@ function setupJoystick(baseElem, updateKeys) {
         const maxDist = 35;
         if (dist > maxDist) { dx = (dx / dist) * maxDist;
             dy = (dy / dist) * maxDist; }
-        stickElem.style.transform = `translate(${dx}px, ${dy}px)`;
+        stickElem.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
         const threshold = 10;
         updateKeys(dy < -threshold, dy > threshold, dx < -threshold, dx > threshold);
     }
@@ -626,6 +617,9 @@ function initMatch() {
     matchState = 'PLAY';
     halftimeTimer = 0;
     kickoffDelay = 0.5;
+    matchEnded = false;
+    matchActive = true;
+    goalZoomScale = 1.0;
     resetField();
 }
 
@@ -838,12 +832,8 @@ function getAIConfig() {
             chaseRate: 0.45,
             retreatRate: 0.45,
             hesitateRate: 0.10,
-            lockThreshold: 25,
-            lockTimer: 18,
             stateSwitchCooldown: 35,
-            movementSmoothness: 0.3,
             retreatDistance: 620,
-            chaseAggressiveness: 1.0,
         };
     } else if (difficulty === 'MEDIUM') {
         return {
@@ -861,12 +851,8 @@ function getAIConfig() {
             chaseRate: 0.55,
             retreatRate: 0.35,
             hesitateRate: 0.10,
-            lockThreshold: 25,
-            lockTimer: 18,
             stateSwitchCooldown: 40,
-            movementSmoothness: 0.4,
             retreatDistance: 600,
-            chaseAggressiveness: 1.2,
         };
     } else {
         return {
@@ -884,12 +870,8 @@ function getAIConfig() {
             chaseRate: 0.70,
             retreatRate: 0.25,
             hesitateRate: 0.05,
-            lockThreshold: 25,
-            lockTimer: 18,
             stateSwitchCooldown: 45,
-            movementSmoothness: 0.5,
             retreatDistance: 580,
-            chaseAggressiveness: 1.5,
         };
     }
 }
@@ -897,13 +879,20 @@ function getAIConfig() {
 // ============================================================
 //  UPDATE FUNCTION
 // ============================================================
-let lastTime = 0;
-
-function update(dt) {
+function update() {
     if (currentState === 'PAUSED') return;
     const ai = getAIConfig();
     updateParticles();
-    updatePageParticles();
+
+    // Update menu particles
+    for (let p of menuBgParticles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = W;
+        if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H;
+        if (p.y > H) p.y = 0;
+    }
 
     if (screenShake.duration > 0) {
         screenShake.duration--;
@@ -922,7 +911,7 @@ function update(dt) {
     if (currentState === 'MATCH_END') return;
 
     if (matchState === 'HALFTIME') {
-        halftimeTimer -= dt;
+        halftimeTimer -= 1 / 60;
         if (halftimeTimer <= 0) {
             SoundManager.playSFX('whistleStart', 0.7);
             currentHalf = 2;
@@ -937,7 +926,7 @@ function update(dt) {
     }
 
     if (currentState === 'GOAL_SCORED') {
-        goalBannerTimer += dt * 60;
+        goalBannerTimer++;
         if (goalBannerTimer > 110) {
             goalBannerTimer = 0;
             resetField();
@@ -952,9 +941,9 @@ function update(dt) {
 
     if (kickoffDelay > 0) {
         if (kickoffDelay < 0.1 && kickoffDelay > 0) SoundManager.playSFX('whistleStart', 0.7);
-        kickoffDelay -= dt;
+        kickoffDelay -= 1 / 60;
     } else {
-        matchClock -= dt;
+        matchClock -= 1 / 60;
         if (matchClock <= 0) {
             matchClock = 0;
             if (currentHalf === 1) {
@@ -974,6 +963,7 @@ function update(dt) {
                 }
                 matchState = 'MATCH_END';
                 currentState = 'MATCH_END';
+                matchEnded = true;
                 let winnerText = '';
                 if (score.red > score.blue) winnerText = 'RED TEAM WINS!';
                 else if (score.blue > score.red) winnerText = 'BLUE TEAM WINS!';
@@ -1034,6 +1024,7 @@ function update(dt) {
     let redGkHasBall = ball.owner && ball.owner.team === 'red' && ball.owner.isGk;
     let blueGkHasBall = ball.owner && ball.owner.team === 'blue' && ball.owner.isGk;
 
+    // ─── RED PLAYER (P1) ───
     if (activeRed && !activeRed.ejecting) {
         let nx = activeRed.x,
             ny = activeRed.y;
@@ -1053,10 +1044,11 @@ function update(dt) {
         }
     }
 
-    // ─── SMART DECISIVE AI ───
+    // ─── SMART DECISIVE AI (BLUE) ───
     if (activeBlue && !activeBlue.ejecting) {
         let nx = activeBlue.x,
             ny = activeBlue.y;
+
         if (gameMode === '1v1') {
             if (keys.ArrowUp) ny -= playerSpeed;
             if (keys.ArrowDown) ny += playerSpeed;
@@ -1065,16 +1057,22 @@ function update(dt) {
         } else {
             if (aiReactionTimer <= 0 && aiStartDelay <= 0) {
                 let aiSpeed = playerSpeed * ai.speedMultiplier;
+
                 if (ball.owner === activeBlue) {
+                    // AI HAS THE BALL
                     aiHoldBallTimer++;
                     aiDribbleTime += 0.04;
                     let curveY = Math.sin(aiDribbleTime) * 130;
                     let targetY = 300 + curveY;
+
                     if (activeBlue.x > 160) nx -= aiSpeed;
                     if (activeBlue.y < targetY - 15) ny += aiSpeed;
                     else if (activeBlue.y > targetY + 15) ny -= aiSpeed;
+
                     arrowAngle = Math.atan2(300 - activeBlue.y, 25 - activeBlue.x);
+
                     let isCloseToGoal = activeBlue.x < ai.shootRange;
+
                     if (aiPassCooldown <= 0 && activeBlue.x > 380) {
                         let teammates = players.filter(p => p.team === 'blue' && !p.isGk && p !== activeBlue);
                         let randomTeammate = teammates[Math.floor(Math.random() * teammates.length)];
@@ -1088,6 +1086,7 @@ function update(dt) {
                             aiPassCooldown = ai.passCooldown;
                         }
                     }
+
                     let forcePanicShot = (isCloseToGoal && aiHoldBallTimer > ai.panicTimer);
                     if ((forcePanicShot || (isCloseToGoal && Math.random() < 0.03)) && ball.owner === activeBlue) {
                         if (Math.random() < (1 - ai.perfectShotRate)) arrowAngle += Math.random() > 0.5 ? ai.missError : -
@@ -1097,13 +1096,16 @@ function update(dt) {
                         aiPassCooldown = 60;
                     }
                 } else {
+                    // AI DOES NOT HAVE THE BALL
                     aiHoldBallTimer = 0;
                     const isBallLoose = !ball.owner;
                     const ballInAIHalf = ball.x < 450;
                     const ballInHumanHalf = ball.x > 450;
-                    aiStateTimer -= dt * 60;
+
+                    aiStateTimer--;
                     if (aiStateTimer <= 0 || isBallLoose) {
                         let roll = Math.random();
+
                         if (isBallLoose) {
                             aiState = 'CHASE';
                             aiTargetOffset = { x: (Math.random() - 0.5) * 30, y: (Math.random() - 0.5) * 30 };
@@ -1123,6 +1125,7 @@ function update(dt) {
                                 aiCommitTimer = 15; } else { aiState = 'HESITATE';
                                 aiCommitTimer = 10; }
                         }
+
                         if (aiCommitTimer < 15) aiCommitTimer = 15;
                         if (aiState === 'CHASE') { aiTargetX = ball.x + aiTargetOffset.x;
                             aiTargetY = ball.y + aiTargetOffset.y; } else if (aiState === 'RETREAT') { aiTargetX = ai
@@ -1130,9 +1133,12 @@ function update(dt) {
                             aiTargetY = 300 + (Math.random() - 0.5) * 80; } else { aiTargetX = activeBlue.x + (Math.random() -
                                 0.5) * 60;
                             aiTargetY = activeBlue.y + (Math.random() - 0.5) * 60; }
+
                         aiStateTimer = Math.floor(Math.random() * 20) + ai.stateSwitchCooldown;
                     }
+
                     if (aiCommitTimer > 0) aiCommitTimer--;
+
                     if (aiState === 'CHASE' || aiCommitTimer > 0 || isBallLoose) {
                         let dx = aiTargetX - activeBlue.x;
                         let dy = aiTargetY - activeBlue.y;
@@ -1157,6 +1163,7 @@ function update(dt) {
                 }
             }
         }
+
         activeBlue.x = nx;
         activeBlue.y = ny;
         if (activeBlue.isGk) {
@@ -1472,7 +1479,7 @@ function drawScoreboard() {
 
     let minutes = Math.floor(matchClock / 60);
     let seconds = Math.floor(matchClock % 60);
-    let timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    let timeStr = String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
     ctx.fillStyle = matchClock <= 5 ? '#ff5252' : '#f1c40f';
     ctx.font = '800 20px Outfit, sans-serif';
     ctx.textAlign = 'center';
@@ -1523,12 +1530,6 @@ function drawMenuBackground() {
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#ffffff';
     for (let p of menuBgParticles) {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < 0) p.x = W;
-        if (p.x > W) p.x = 0;
-        if (p.y < 0) p.y = H;
-        if (p.y > H) p.y = 0;
         ctx.save();
         ctx.globalAlpha = p.alpha;
         ctx.beginPath();
@@ -1552,16 +1553,16 @@ function drawDifficultySelect() {
     ctx.font = '600 16px Outfit, sans-serif';
     ctx.fillText('Choose your challenge level', 450, 190);
 
+    const diffPositions = [180, 370, 560];
     const diffs = [
-        { label: 'EASY', x: 255, color: '#2ecc71', desc: 'Casual Play', value: 'EASY' },
-        { label: 'MEDIUM', x: 445, color: '#f1c40f', desc: 'Balanced Challenge', value: 'MEDIUM' },
-        { label: 'HARD', x: 635, color: '#e74c3c', desc: 'Expert Challenge', value: 'HARD' },
+        { label: 'EASY', color: '#2ecc71', desc: 'Casual Play', value: 'EASY' },
+        { label: 'MEDIUM', color: '#f1c40f', desc: 'Balanced Challenge', value: 'MEDIUM' },
+        { label: 'HARD', color: '#e74c3c', desc: 'Expert Challenge', value: 'HARD' },
     ];
 
-    const diffPositions = [180, 370, 560];
     diffs.forEach((d, i) => {
         const x = diffPositions[i];
-        ctx.fillStyle = difficulty === d.value ? `rgba(255,255,255,0.12)` : 'rgba(255,255,255,0.04)';
+        ctx.fillStyle = difficulty === d.value ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)';
         ctx.beginPath();
         ctx.roundRect(x, 250, 150, 90, 16);
         ctx.fill();
@@ -1674,7 +1675,7 @@ function drawPauseMenu() {
     ctx.stroke();
     ctx.fillStyle = SoundManager.musicEnabled ? '#2ecc71' : '#e74c3c';
     ctx.font = '700 16px Outfit, sans-serif';
-    ctx.fillText(`🎵 ${SoundManager.musicEnabled ? 'ON' : 'OFF'}`, 385, 410);
+    ctx.fillText('🎵 ' + (SoundManager.musicEnabled ? 'ON' : 'OFF'), 385, 410);
 
     ctx.fillStyle = SoundManager.sfxEnabled ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
     ctx.beginPath();
@@ -1685,7 +1686,7 @@ function drawPauseMenu() {
     ctx.stroke();
     ctx.fillStyle = SoundManager.sfxEnabled ? '#2ecc71' : '#e74c3c';
     ctx.font = '700 16px Outfit, sans-serif';
-    ctx.fillText(`🔊 ${SoundManager.sfxEnabled ? 'ON' : 'OFF'}`, 515, 410);
+    ctx.fillText('🔊 ' + (SoundManager.sfxEnabled ? 'ON' : 'OFF'), 515, 410);
 
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '500 10px Outfit, sans-serif';
@@ -1747,7 +1748,8 @@ function draw() {
         ctx.fillStyle = 'rgba(255,255,255,0.3)';
         ctx.font = '600 12px Outfit, sans-serif';
         ctx.textAlign = 'right';
-        ctx.fillText(`🎵${SoundManager.musicEnabled ? 'ON' : 'OFF'} 🔊${SoundManager.sfxEnabled ? 'ON' : 'OFF'} [M:SFX] [N:Music]`, 870, 580);
+        ctx.fillText('🎵' + (SoundManager.musicEnabled ? 'ON' : 'OFF') + ' 🔊' + (SoundManager.sfxEnabled ? 'ON' : 'OFF') +
+            ' [M:SFX] [N:Music]', 870, 580);
         ctx.restore();
         ctx.restore();
         return;
@@ -1774,7 +1776,7 @@ function draw() {
             ctx.stroke();
             ctx.font = '600 17px Outfit, sans-serif';
             ctx.fillStyle = '#f1c40f';
-            ctx.fillText(`MATCH RULE: Two ${halfDuration}s halves -- most goals wins!`, 450, 160);
+            ctx.fillText('MATCH RULE: Two ' + halfDuration + 's halves -- most goals wins!', 450, 160);
             ctx.fillStyle = '#ffffff';
             if (isMobileDevice) {
                 ctx.fillText('• RED TEAM: Bottom-Left Joystick | Shoot Button ⚽', 450, 220);
@@ -1787,7 +1789,7 @@ function draw() {
             ctx.fillText('• Touching an opponent GK gets you immediately ejected.', 450, 350);
             ctx.fillText('• Shots blocked by the GK push the shooter back.', 450, 390);
             ctx.fillStyle = '#f1c40f';
-            ctx.fillText(`• Press [ P ] or tap pause button to pause the game`, 450, 430);
+            ctx.fillText('• Press [ P ] or tap pause button to pause the game', 450, 430);
         } else {
             ctx.font = '900 36px Outfit, sans-serif';
             ctx.fillText('SETTINGS', 450, 80);
@@ -1799,7 +1801,7 @@ function draw() {
             ctx.stroke();
             ctx.font = '800 22px Outfit, sans-serif';
             ctx.fillStyle = '#f1c40f';
-            ctx.fillText(`Half Duration: ${halfDuration} seconds`, 450, 180);
+            ctx.fillText('Half Duration: ' + halfDuration + ' seconds', 450, 180);
             ctx.font = '600 16px Outfit, sans-serif';
             ctx.fillStyle = '#ffffff';
             ctx.fillText('Use [ UP ] and [ DOWN ] Arrow Keys or Tap to modify', 450, 215);
@@ -1820,7 +1822,7 @@ function draw() {
             ctx.stroke();
             ctx.fillStyle = SoundManager.musicEnabled ? '#2ecc71' : '#e74c3c';
             ctx.font = '700 18px Outfit, sans-serif';
-            ctx.fillText(`🎵 Music: ${SoundManager.musicEnabled ? 'ON' : 'OFF'}`, 450, 335);
+            ctx.fillText('🎵 Music: ' + (SoundManager.musicEnabled ? 'ON' : 'OFF'), 450, 335);
 
             const sfxBtn = { x: 350, y: 360, w: 200, h: 40 };
             ctx.fillStyle = SoundManager.sfxEnabled ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
@@ -1832,7 +1834,7 @@ function draw() {
             ctx.stroke();
             ctx.fillStyle = SoundManager.sfxEnabled ? '#2ecc71' : '#e74c3c';
             ctx.font = '700 18px Outfit, sans-serif';
-            ctx.fillText(`🔊 SFX: ${SoundManager.sfxEnabled ? 'ON' : 'OFF'}`, 450, 390);
+            ctx.fillText('🔊 SFX: ' + (SoundManager.sfxEnabled ? 'ON' : 'OFF'), 450, 390);
 
             ctx.fillStyle = '#95a5a6';
             ctx.font = '600 12px Outfit, sans-serif';
@@ -1846,104 +1848,7 @@ function draw() {
         return;
     }
 
-    if (currentState === 'PAUSED') {
-        drawPitch();
-        for (let p of players) {
-            ctx.fillStyle = 'rgba(0,0,0,0.3)';
-            ctx.beginPath();
-            ctx.ellipse(p.x, p.y + p.radius * 0.8, p.radius * 0.9, p.radius * 0.45, 0, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        let activeRed = getActivePlayer('red');
-        let activeBlue = getActivePlayer('blue');
-        if (activeRed && !activeRed.ejecting) drawActiveIndicator(activeRed, 'P1', '#f39c12');
-        if (activeBlue && !activeBlue.ejecting) {
-            drawActiveIndicator(activeBlue, gameMode === '1v1' ? 'P2' : 'COM',
-                gameMode === '1v1' ? '#00ffff' : '#9b59b6');
-        }
-        for (let p of players) {
-            let pGrad = ctx.createRadialGradient(p.x - 4, p.y - 4, 2, p.x, p.y, p.radius);
-            pGrad.addColorStop(0, p.color);
-            pGrad.addColorStop(1, p.gradColor);
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-            ctx.fillStyle = pGrad;
-            ctx.fill();
-            ctx.lineWidth = p.isGk ? 3 : 2;
-            ctx.strokeStyle = p.isGk ? '#f1c40f' : '#ffffff';
-            ctx.stroke();
-            drawStar(p.x, p.y, 5, 8, 3.5);
-        }
-        for (let post of posts) {
-            ctx.fillStyle = 'rgba(0,0,0,0.4)';
-            ctx.beginPath();
-            ctx.ellipse(post.x, post.y + 4, post.radius, post.radius * 0.5, 0, 0, Math.PI * 2);
-            ctx.fill();
-            let postGrad = ctx.createRadialGradient(post.x - 2, post.y - 2, 1, post.x, post.y, post.radius);
-            postGrad.addColorStop(0, '#ffffff');
-            postGrad.addColorStop(1, '#bdc3c7');
-            ctx.beginPath();
-            ctx.arc(post.x, post.y, post.radius, 0, Math.PI * 2);
-            ctx.fillStyle = postGrad;
-            ctx.fill();
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = '#2c3e50';
-            ctx.stroke();
-        }
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.beginPath();
-        ctx.ellipse(ball.x, ball.y + ball.r * 0.7, ball.r * 0.9, ball.r * 0.4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#1e272e';
-        ctx.stroke();
-        ctx.fillStyle = '#1e272e';
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-        if (ball.owner) {
-            ctx.save();
-            let sx = ball.owner.x + Math.cos(arrowAngle) * 22;
-            let sy = ball.owner.y + Math.sin(arrowAngle) * 22;
-            let ex = ball.owner.x + Math.cos(arrowAngle) * 65;
-            let ey = ball.owner.y + Math.sin(arrowAngle) * 65;
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            ctx.lineTo(ex, ey);
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = '#f1c40f';
-            ctx.shadowColor = '#f1c40f';
-            ctx.shadowBlur = 8;
-            ctx.stroke();
-            let ta1 = arrowAngle + Math.PI * 0.85;
-            let ta2 = arrowAngle - Math.PI * 0.85;
-            ctx.beginPath();
-            ctx.moveTo(ex, ey);
-            ctx.lineTo(ex + Math.cos(ta1) * 11, ey + Math.sin(ta1) * 11);
-            ctx.moveTo(ex, ey);
-            ctx.lineTo(ex + Math.cos(ta2) * 11, ey + Math.sin(ta2) * 11);
-            ctx.stroke();
-            ctx.restore();
-        }
-        for (let p of particles) {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(p.rotation);
-            ctx.fillStyle = p.color;
-            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-            ctx.restore();
-        }
-        drawScoreboard();
-        drawGkTimerUI();
-        drawPauseMenu();
-        ctx.restore();
-        return;
-    }
-
+    // ─── GAME SCREEN ───
     drawPitch();
 
     for (let p of players) {
@@ -2074,6 +1979,10 @@ function draw() {
         ctx.restore();
     }
 
+    if (currentState === 'PAUSED') {
+        drawPauseMenu();
+    }
+
     if (currentState === 'GOAL_SCORED') {
         ctx.save();
         ctx.fillStyle = 'rgba(15,23,42,0.88)';
@@ -2106,7 +2015,7 @@ function draw() {
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#ffffff';
         ctx.font = '700 26px Outfit, sans-serif';
-        ctx.fillText(`RED ${score.red} - ${score.blue} BLUE`, 450, 330);
+        ctx.fillText('RED ' + score.red + ' - ' + score.blue + ' BLUE', 450, 330);
         ctx.fillStyle = '#95a5a6';
         ctx.font = '600 18px Outfit, sans-serif';
         ctx.fillText('Press any key or tap to continue', 450, 380);
@@ -2119,13 +2028,8 @@ function draw() {
 // ============================================================
 //  GAME LOOP
 // ============================================================
-let isMobileDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-
-function gameLoop(timestamp) {
-    let dt = (timestamp - lastTime) / 1000;
-    if (dt > 0.1) dt = 0.1;
-    lastTime = timestamp;
-    update(dt);
+function gameLoop() {
+    update();
     draw();
     requestAnimationFrame(gameLoop);
 }
@@ -2134,7 +2038,8 @@ function gameLoop(timestamp) {
 //  INITIALIZATION
 // ============================================================
 initMatch();
-gameLoop(performance.now());
+updateTouchUI();
+gameLoop();
 
 console.log('🎵 SOUND SYSTEM READY!');
 console.log('🧠 SMART DECISIVE AI ACTIVATED!');
