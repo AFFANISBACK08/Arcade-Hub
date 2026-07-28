@@ -1,378 +1,165 @@
-/* =========================================================
-   GLOBAL RESET
-========================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap');
 
 * {
-    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    -webkit-tap-highlight-color: transparent;
-}
-
-html,
-body {
-    width: 100%;
-    height: 100%;
-}
-
-body {
-    background:
-        radial-gradient(
-            circle at center,
-            #1e272e 0%,
-            #0f1419 70%
-        );
-
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    overflow: hidden;
-
-    font-family:
-        "Outfit",
-        "Segoe UI",
-        Arial,
-        sans-serif;
-
-    color: white;
-
-    touch-action: none;
-}
-
-
-/* =========================================================
-   GAME CONTAINER
-========================================================= */
-
-#gameContainer {
-    position: relative;
-
-    width: min(100vw, 900px);
-    height: min(100vh, 600px);
-
-    aspect-ratio: 3 / 2;
-
-    box-shadow:
-        0 20px 50px rgba(0, 0, 0, 0.9),
-        0 0 30px rgba(46, 204, 113, 0.2);
-
-    border-radius: 12px;
-
-    overflow: hidden;
-
-    border: 4px solid #ffffff;
-
-    background: #27ae60;
-
-    flex-shrink: 0;
-}
-
-
-/* =========================================================
-   CANVAS
-========================================================= */
-
-#footballCanvas {
-    display: block;
-
-    width: 100%;
-    height: 100%;
-
-    background: #27ae60;
-
-    image-rendering: auto;
-
-    touch-action: none;
-}
-
-
-/* =========================================================
-   MOBILE CONTROLS
-========================================================= */
-
-.mobile-controls {
-
-    position: absolute;
-
-    left: 0;
-    right: 0;
-
-    bottom: 12px;
-
-    width: 100%;
-
-    display: none;
-
-    align-items: flex-end;
-
-    justify-content: space-between;
-
-    padding:
-        0
-        max(15px, env(safe-area-inset-right))
-        max(15px, env(safe-area-inset-bottom))
-        max(15px, env(safe-area-inset-left));
-
-    pointer-events: none;
-
-    z-index: 20;
-}
-
-
-/* =========================================================
-   D-PAD
-========================================================= */
-
-.d-pad {
-
-    display: flex;
-
-    flex-direction: column;
-
-    align-items: center;
-
-    gap: 5px;
-
-    pointer-events: none;
-}
-
-
-.d-pad-row {
-
-    display: flex;
-
-    align-items: center;
-
-    gap: 5px;
-
-    pointer-events: none;
-}
-
-
-/* =========================================================
-   CONTROL BUTTON
-========================================================= */
-
-.ctrl-btn {
-
-    width: clamp(42px, 7vw, 60px);
-    height: clamp(42px, 7vw, 60px);
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 12px;
-
-    background:
-        rgba(255, 255, 255, 0.14);
-
-    backdrop-filter:
-        blur(12px);
-
-    -webkit-backdrop-filter:
-        blur(12px);
-
-    border:
-        1px solid
-        rgba(255, 255, 255, 0.35);
-
-    color: white;
-
-    font-size: clamp(16px, 3vw, 24px);
-
-    font-weight: bold;
-
-    user-select: none;
-
+    box-sizing: border-box;
+    -webkit-touch-callout: none;
     -webkit-user-select: none;
+    user-select: none;
+}
 
+body {
+    background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Outfit', sans-serif;
+    color: #ffffff;
+    overflow: hidden;
     touch-action: none;
-
-    pointer-events: auto;
-
-    box-shadow:
-        0 8px 20px
-        rgba(0, 0, 0, 0.35);
-
-    transition:
-        transform 0.08s ease,
-        background 0.08s ease;
 }
 
-
-.ctrl-btn:active,
-.ctrl-btn.pressed {
-
-    background:
-        rgba(0, 243, 255, 0.5);
-
-    border-color:
-        #00f3ff;
-
-    transform:
-        scale(0.92);
-
-    box-shadow:
-        0 0 20px
-        rgba(0, 243, 255, 0.5);
+.game-wrapper {
+    position: relative;
+    background: #0f172a;
+    border-radius: 20px;
+    box-shadow: 
+        0 0 50px rgba(56, 189, 248, 0.25), 
+        0 0 100px rgba(239, 68, 68, 0.15),
+        0 20px 40px rgba(0, 0, 0, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    overflow: hidden;
+    max-width: 100vw;
+    max-height: 100vh;
+    transition: border-color 0.3s ease;
 }
 
+canvas {
+    display: block;
+    max-width: 100vw;
+    max-height: 100vh;
+    object-fit: contain;
+    touch-action: none;
+}
 
-/* =========================================================
-   ACTION BUTTON
-========================================================= */
-
-.action-buttons {
-
+/* ─── GOAL IMPACT FLASH & SHAKE FX ─── */
+.goal-flash-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(241,196,15,0.6) 100%);
     pointer-events: none;
+    opacity: 0;
+    z-index: 10;
+    transition: opacity 0.05s ease-out;
 }
 
+.goal-flash-overlay.active {
+    opacity: 1;
+    animation: flashFade 0.45s ease-out forwards;
+}
 
-.round {
+@keyframes flashFade {
+    0% { opacity: 0.95; }
+    30% { opacity: 0.6; }
+    100% { opacity: 0; }
+}
 
-    width: clamp(60px, 10vw, 85px);
-    height: clamp(60px, 10vw, 85px);
+/* Violent Screen Shake for Goal Dopamine Impact */
+.game-wrapper.shake-impact {
+    animation: violentShake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+}
 
+@keyframes violentShake {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    10% { transform: translate(-14px, 10px) rotate(-1.5deg); }
+    20% { transform: translate(16px, -12px) rotate(2deg); }
+    30% { transform: translate(-12px, -14px) rotate(-1deg); }
+    40% { transform: translate(14px, 12px) rotate(1.5deg); }
+    50% { transform: translate(-16px, 8px) rotate(-2deg); }
+    60% { transform: translate(10px, -10px) rotate(1deg); }
+    70% { transform: translate(-8px, 14px) rotate(-1.5deg); }
+    80% { transform: translate(12px, -8px) rotate(1deg); }
+    90% { transform: translate(-10px, 5px) rotate(-0.5deg); }
+    100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+/* ─── TOUCH CONTROLS ─── */
+.touch-controls {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: none;
+    z-index: 5;
+}
+
+.joystick-base {
+    position: absolute;
+    width: 110px;
+    height: 110px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
-
-    font-size:
-        clamp(28px, 5vw, 40px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: auto;
+    touch-action: none;
+    backdrop-filter: blur(6px);
 }
 
-
-.blue-action-btn {
-
-    background:
-        rgba(52, 152, 219, 0.25);
+.joystick-stick {
+    width: 45px;
+    height: 45px;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.6);
+    pointer-events: none;
+    transition: transform 0.05s linear;
 }
 
-
-/* =========================================================
-   BLUE TEAM D-PAD
-========================================================= */
-
-.blue-d-pad {
-
-    margin-left: auto;
+.shoot-btn {
+    position: absolute;
+    width: 75px;
+    height: 75px;
+    background: radial-gradient(circle, rgba(241, 196, 15, 0.85) 0%, rgba(211, 84, 0, 0.85) 100%);
+    border: 3px solid rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    font-size: 34px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: none;
+    box-shadow: 0 0 25px rgba(241, 196, 15, 0.5);
+    outline: none;
 }
 
-
-/* =========================================================
-   RESPONSIVE TABLET / MOBILE
-========================================================= */
-
-@media (max-width: 900px) {
-
-    body {
-        padding: 0;
-    }
-
-    #gameContainer {
-
-        width: 100vw;
-
-        height: auto;
-
-        max-height: 100vh;
-
-        aspect-ratio: 3 / 2;
-
-        border-width: 2px;
-
-        border-radius: 0;
-    }
-
-    .mobile-controls {
-        display: flex;
-    }
+.shoot-btn:active {
+    transform: scale(0.92);
+    background: radial-gradient(circle, rgba(241, 196, 15, 1) 0%, rgba(211, 84, 0, 1) 100%);
 }
 
+.mode-pve .p1-joy { bottom: 25px; left: 25px; }
+.mode-pve .p1-shoot { bottom: 25px; right: 25px; }
+.mode-pve .p2-joy, .mode-pve .p2-shoot { display: none !important; }
 
-/* =========================================================
-   SMALL MOBILE
-========================================================= */
+.mode-1v1 .p1-joy { bottom: 25px; left: 25px; }
+.mode-1v1 .p1-shoot { top: 25px; left: 25px; }
+.mode-1v1 .p2-joy { top: 25px; right: 25px; }
+.mode-1v1 .p2-shoot { bottom: 25px; right: 25px; }
 
-@media (max-width: 600px) {
-
-    .mobile-controls {
-
-        bottom: 8px;
-
-        padding-left: 8px;
-        padding-right: 8px;
-    }
-
-    .ctrl-btn {
-
-        width: 45px;
-        height: 45px;
-
-        font-size: 17px;
-    }
-
-    .round {
-
-        width: 62px;
-        height: 62px;
-
-        font-size: 28px;
-    }
-}
-
-
-/* =========================================================
-   LANDSCAPE PHONE
-========================================================= */
-
-@media
-(max-height: 500px)
-and (orientation: landscape) {
-
-    #gameContainer {
-
-        width: 100vw;
-
-        height: 100vh;
-
-        aspect-ratio: auto;
-    }
-
-    .mobile-controls {
-
-        bottom: 5px;
-    }
-
-    .ctrl-btn {
-
-        width: 42px;
-        height: 42px;
-    }
-
-    .round {
-
-        width: 58px;
-        height: 58px;
-    }
-}
-
-
-/* =========================================================
-   PORTRAIT PHONE
-========================================================= */
-
-@media
-(max-width: 600px)
-and (orientation: portrait) {
-
-    #gameContainer {
-
-        width: 100vw;
-
-        height: auto;
-
-        aspect-ratio: 3 / 2;
+/* ─── ONLY SHOW ON MOBILE / TOUCH DEVICES ─── */
+@media (hover: none) and (pointer: coarse) {
+    .touch-controls.is-active {
+        display: block !important;
     }
 }
