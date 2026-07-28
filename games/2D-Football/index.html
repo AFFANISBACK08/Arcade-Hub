@@ -2,161 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-
-    <!-- Responsive viewport -->
-    <meta
-        name="viewport"
-        content="width=device-width,
-                 initial-scale=1.0,
-                 maximum-scale=1.0,
-                 user-scalable=no,
-                 viewport-fit=cover"
-    >
-
-    <title>Pro Striker - 2D Football</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Striker - 1v1 & VS Computer</title>
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+    <div class="game-wrapper" id="gameWrapper">
+        <!-- Goal Impact Flash Overlay -->
+        <div id="goalFlash" class="goal-flash-overlay"></div>
 
-    <!-- Main Game Wrapper -->
-    <div id="gameContainer">
-
-        <!-- Game Canvas -->
-        <canvas
-            id="footballCanvas"
-            width="900"
-            height="600"
-        ></canvas>
-
-        <!-- MOBILE / TABLET CONTROLS -->
-        <div class="mobile-controls">
-
-            <!-- RED TEAM CONTROLS -->
-            <div class="d-pad">
-
-                <button
-                    id="btn-up"
-                    class="ctrl-btn"
-                    data-key="w"
-                    aria-label="Move Up"
-                >
-                    ▲
-                </button>
-
-                <div class="d-pad-row">
-
-                    <button
-                        id="btn-left"
-                        class="ctrl-btn"
-                        data-key="a"
-                        aria-label="Move Left"
-                    >
-                        ◀
-                    </button>
-
-                    <button
-                        id="btn-down"
-                        class="ctrl-btn"
-                        data-key="s"
-                        aria-label="Move Down"
-                    >
-                        ▼
-                    </button>
-
-                    <button
-                        id="btn-right"
-                        class="ctrl-btn"
-                        data-key="d"
-                        aria-label="Move Right"
-                    >
-                        ▶
-                    </button>
-
-                </div>
-
+        <canvas id="gameCanvas" width="900" height="600"></canvas>
+        
+        <!-- Mobile Touch Controls Overlay (Hidden on PC) -->
+        <div id="touchControls" class="touch-controls mode-pve">
+            <!-- Player 1 Controls -->
+            <div id="p1Joystick" class="joystick-base p1-joy">
+                <div class="joystick-stick"></div>
             </div>
+            <button id="p1Shoot" class="shoot-btn p1-shoot" aria-label="Shoot P1">⚽</button>
 
-            <!-- RED TEAM ACTION -->
-            <div class="action-buttons">
-
-                <button
-                    id="btn-action"
-                    class="ctrl-btn round"
-                    data-key="space"
-                    aria-label="Shoot or Pass"
-                >
-                    ⚽
-                </button>
-
+            <!-- Player 2 Controls (Active in 1v1 Mode on Mobile) -->
+            <div id="p2Joystick" class="joystick-base p2-joy">
+                <div class="joystick-stick"></div>
             </div>
-
-
-            <!-- BLUE TEAM CONTROLS -->
-            <div class="d-pad blue-d-pad">
-
-                <button
-                    id="btn-blue-up"
-                    class="ctrl-btn"
-                    data-key="ArrowUp"
-                    aria-label="Blue Move Up"
-                >
-                    ▲
-                </button>
-
-                <div class="d-pad-row">
-
-                    <button
-                        id="btn-blue-left"
-                        class="ctrl-btn"
-                        data-key="ArrowLeft"
-                        aria-label="Blue Move Left"
-                    >
-                        ◀
-                    </button>
-
-                    <button
-                        id="btn-blue-down"
-                        class="ctrl-btn"
-                        data-key="ArrowDown"
-                        aria-label="Blue Move Down"
-                    >
-                        ▼
-                    </button>
-
-                    <button
-                        id="btn-blue-right"
-                        class="ctrl-btn"
-                        data-key="ArrowRight"
-                        aria-label="Blue Move Right"
-                    >
-                        ▶
-                    </button>
-
-                </div>
-
-            </div>
-
-            <!-- BLUE TEAM ACTION -->
-            <div class="action-buttons blue-action">
-
-                <button
-                    id="btn-blue-action"
-                    class="ctrl-btn round blue-action-btn"
-                    data-key="enter"
-                    aria-label="Blue Shoot or Pass"
-                >
-                    ⚽
-                </button>
-
-            </div>
-
+            <button id="p2Shoot" class="shoot-btn p2-shoot" aria-label="Shoot P2">⚽</button>
         </div>
-
     </div>
-
     <script src="script.js"></script>
-
 </body>
 </html>
