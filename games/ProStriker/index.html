@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>⚽ Pro Striker – Ultimate Football</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+        /* Loading Screen */
+        #loadingScreen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: radial-gradient(circle, #0f1720, #06070a);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            font-family: 'Outfit', sans-serif;
+            transition: opacity 0.8s ease;
+        }
+        #loadingScreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid #f1c40f;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loadingScreen h1 {
+            color: white;
+            font-size: 32px;
+            margin-top: 30px;
+            background: linear-gradient(135deg, #f1c40f, #e74c3c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        #loadingScreen p { color: rgba(255,255,255,0.5); margin-top: 10px; font-size: 14px; }
+        .progress-bar { width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 20px; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #f1c40f, #e74c3c); border-radius: 2px; transition: width 0.3s ease; }
+    </style>
+</head>
+<body>
+    <div id="gameWrapper" class="game-wrapper">
+        <!-- Loading Screen -->
+        <div id="loadingScreen">
+            <div class="loader"></div>
+            <h1>⚽ PRO STRIKER</h1>
+            <p>Loading the beautiful game...</p>
+            <div class="progress-bar"><div class="progress-fill" id="loadProgress"></div></div>
+        </div>
+
+        <canvas id="gameCanvas" width="900" height="600"></canvas>
+        
+        <!-- Goal Flash -->
+        <div id="goalFlash" class="goal-flash"></div>
+        <!-- Celebration Overlay -->
+        <div id="celebrationOverlay" class="celebration-overlay"></div>
+        
+        <!-- Match Stats -->
+        <div id="matchStats" class="match-stats">
+            <div class="stat-item"><span class="stat-label">Possession</span><span class="stat-value" id="possessionStat">50%</span></div>
+            <div class="stat-item"><span class="stat-label">Shots</span><span class="stat-value" id="shotsStat">0-0</span></div>
+            <div class="stat-item"><span class="stat-label">Passes</span><span class="stat-value" id="passesStat">0</span></div>
+            <div class="stat-item"><span class="stat-label">Rank</span><span class="stat-value" id="rankStat">Bronze</span></div>
+        </div>
+
+        <!-- Touch Controls -->
+        <div id="touchControls" class="touch-controls mode-1v1">
+            <div id="p1Joystick" class="joystick-base p1-joy"><div class="joystick-stick"></div></div>
+            <button id="p1Shoot" class="shoot-btn p1-shoot" aria-label="Shoot P1">⚽</button>
+            <div id="p2Joystick" class="joystick-base p2-joy"><div class="joystick-stick"></div></div>
+            <button id="p2Shoot" class="shoot-btn p2-shoot" aria-label="Shoot P2">⚽</button>
+        </div>
+
+        <!-- Quick Rematch -->
+        <button id="quickRematch" class="quick-rematch" style="display:none;">🔄 Rematch</button>
+    </div>
+
+    <script src="js/globals.js"></script>
+    <script src="js/sound.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+        // Simulate loading
+        let progress = 0;
+        const loadInterval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 100) progress = 100;
+            document.getElementById('loadProgress').style.width = progress + '%';
+            if (progress >= 100) {
+                clearInterval(loadInterval);
+                setTimeout(() => document.getElementById('loadingScreen').classList.add('hidden'), 500);
+            }
+        }, 100);
+
+        window.addEventListener('load', () => {
+            const tryStart = () => {
+                if (typeof window.bootstrap === 'function') window.bootstrap();
+                else setTimeout(tryStart, 50);
+            };
+            tryStart();
+        });
+    </script>
+</body>
+</html>
